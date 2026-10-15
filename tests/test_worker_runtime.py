@@ -32,7 +32,7 @@ class FakePool:
             raise OSError("database unreachable")
         return 1
     async def fetchrow(self, query):
-        return {key:(self.permissions if "has_table_privilege" in query else self.migrations) for key in ("searches","runs","notifications","leases","acquire","release")}
+        return {key:(self.permissions if "has_table_privilege" in query else self.migrations) for key in ("searches","runs","notifications","leases","acquire","release","private_schema")}
     async def close(self):
         self.closed=True
 
@@ -88,3 +88,8 @@ def test_missing_database_privileges_prevent_worker_start():
         asyncio.run(runtime.start())
     assert pool.closed is True
     assert runtime.pool is None
+
+def test_worker_checks_private_schema_usage():
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[1].joinpath("worker_runtime.py").read_text()
+    assert "has_schema_privilege(current_user,'jobpilot_private','USAGE')" in source
