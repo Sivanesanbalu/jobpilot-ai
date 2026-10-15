@@ -36,3 +36,11 @@ def test_ranked_jobs_render_filtered_and_deduplicated_response():
     assert 'results=data.jobs.map(j=>buckets.get(' in html
     assert 'filter(Boolean)' in html
     assert 'unique listings matching your selected preferences' in html
+
+def test_notification_inbox_requires_signed_in_user():
+    html=TestClient(app).get("/").text
+    assert 'if(!user||!sb)' in html
+    assert 'sb.from("job_notifications").select(' in html
+    assert '.eq("user_id",user.id)' in html
+    assert 'id="loadNotificationsBtn"' in html
+    assert 'Mark read' in html
