@@ -104,3 +104,33 @@ async def discover(q:str="engineer",limit:int=80):
   a,b=await asyncio.gather(remotive(client),arbeitnow(client))
  jobs=clean(a+b)[:limit]
  return {"jobs":jobs,"count":len(jobs),"sources":{"remotive":len(a),"arbeitnow":len(b)},"note":"Public job feeds are not comprehensive. Some sources may temporarily be unavailable."}
+
+from pydantic import BaseModel, Field
+from typing import List
+
+class MatchingInput(BaseModel):
+ skills: List[str] = Field(default_factory=list,max_length=100)
+ preferred_roles: List[str] = Field(default_factory=list,max_length=20)
+ job_title: str = Field(min_length=2,max_length=250)
+ job_description: str = Field(default="",max_length=20000)
+
+@app.post("/api/match/score")
+def score_match(data:MatchingInput):
+ """Explainable heuristic, not a probability of getting hired."""
+ title=data.job_title.lower()
+ description=data.job_description.lower()
+ overlap=[s.strip() for s in data.skills if s.strip() and s.strip().lower() in (title+" "+description)]
+ role_hits=[role.strip() for role in data.preferred_roles if role.strip() and
+            (role.strip().lower() in title or
+             len(set(role.lower().split()) & set(title.split())) >= 2)]
+ score=min(100,round((min(len(overlap),8)/8)*65+(35 if role_hits else 0)))
+ return {"score":score,"matched_skills":overlap[:20],"matched_roles":role_hits[:10],
+         "method":"keyword_overlap","disclaimer":"Relevance heuristic only; not an application or hiring guarantee."}
+
+@app.get("/api/plans")
+def plans():
+ return {"billing_enabled":False,"currency":"INR","plans":[
+ {"id":"free","name":"Free","price":0,"available":True},
+ {"id":"pro","name":"Pro","price":None,"available":False},
+ {"id":"team","name":"Teams","price":None,"available":False}],
+ "notice":"Live checkout is disabled until an authorized payment provider and webhook verification are configured."}
