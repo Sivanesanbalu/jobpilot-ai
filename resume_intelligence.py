@@ -33,12 +33,25 @@ def match_resume_to_job(resume_text, job_title, job_description):
             "method": "skill_keyword_overlap", "requires_manual_review": True,
             "disclaimer": "This is a keyword relevance estimate, not an ATS score or hiring prediction. No resume data is retained."}
 
-def rank_jobs(resume_text, jobs):
-    """Rank at most 100 jobs by observed skill overlap; unscorable jobs go last."""
+def rank_jobs(resume_text, jobs, preferred_location="", remote_only=False, max_experience=None):
+    """Skill relevance first, with transparent preference filtering and no inferred experience claims."""
     output=[]
+    location=(preferred_location or "").strip().casefold()
     for job in jobs[:100]:
-        result=match_resume_to_job(resume_text,job.get("title",""),job.get("description",""))
-        output.append({"title":job.get("title",""),"company":job.get("company",""),"url":job.get("url",""),
+        title=job.get("title","")
+        description=job.get("description","")
+        job_location=(job.get("location") or "").casefold()
+        remote=bool(job.get("remote",False)) or "remote" in job_location
+        years=job.get("min_experience")
+        if remote_only and not remote:
+            continue
+        if location and location not in job_location and not remote:
+            continue
+        if max_experience is not None and years is not None and years>max_experience:
+            continue
+        result=match_resume_to_job(resume_text,title,description)
+        output.append({"title":title,"company":job.get("company",""),"url":job.get("url",""),
+                       "location":job.get("location",""),"remote":remote,
                        "score":result["score"],"matched_skills":result["matched_skills"],
                        "missing_skills":result["missing_skills"],"review_required":True})
     return sorted(output,key=lambda x:(x["score"] is None,-(x["score"] or 0),-len(x["matched_skills"])))
