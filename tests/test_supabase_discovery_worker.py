@@ -17,7 +17,7 @@ class FakeRepository:
         return self.search
     async def start_run(self,search):
         return "run1"
-    async def complete_run(self,run_id,jobs):
+    async def complete_run(self,run_id,jobs,token):
         self.finished.append((run_id,jobs))
         return len(jobs)
     async def fail_run(self,run_id,error):
@@ -54,3 +54,11 @@ def test_busy_worker_does_not_fetch():
     result=asyncio.run(process_search(repo,fetch,"s1"))
     assert result["status"]=="busy"
     assert not repo.finished
+
+def test_completion_receives_lease_token():
+    repo=FakeRepository()
+    async def fetch(query):
+        return [{"url":"https://example.com/a","title":"AI Engineer"}]
+    result=asyncio.run(process_search(repo,fetch,"s1"))
+    assert result["status"]=="succeeded"
+    assert repo.released==["s1"]
