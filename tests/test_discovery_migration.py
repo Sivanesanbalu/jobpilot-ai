@@ -17,3 +17,8 @@ def test_user_notifications_allow_read_state_only():
 def test_worker_owned_tables_not_writable_from_browser():
     assert "grant select on public.discovery_runs to authenticated" in SQL
     assert "grant select on public.job_notifications to authenticated" in SQL
+
+def test_discovery_leases_are_worker_only():
+    assert "create table if not exists public.discovery_worker_leases" in SQL
+    assert "alter table public.discovery_worker_leases enable row level security" in SQL
+    assert "revoke all on public.discovery_worker_leases from anon, authenticated" in SQL
