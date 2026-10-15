@@ -13,3 +13,9 @@ def test_cloud_merge_preserves_unsynced_jobs():
     html = TestClient(app).get("/").text
     assert "remote.concat(jobs().filter" in html
     assert "if(changed){syncReady=false" in html
+
+
+def test_autosync_waits_for_successful_initial_save():
+    html = TestClient(app).get("/").text
+    assert 'if(await sync("profile"))syncReady=true' in html
+    assert 'if(await sync("tracked"))syncReady=true' in html
