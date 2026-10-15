@@ -202,3 +202,14 @@ def application_packet(data:ApplicationPacketInput):
          "submission_status":"NOT_SUBMITTED",
          "ats_readiness":{"provider":provider,"verified_form_schema":False,"required_items":["Current resume attachment","Employer-specific screening answers","Consent and declarations"],"submission_supported":False,"next_action":"Open official employer site and complete application manually"},
          "note":"Draft uses only provided facts. No application was submitted, and employer form requirements were not inspected."}
+
+
+class ResumeMatchInput(BaseModel):
+ resume_text: str = Field(min_length=40,max_length=30000)
+ job_title: str = Field(min_length=2,max_length=250)
+ job_description: str = Field(default="",max_length=20000)
+
+@app.post("/api/resume/match")
+def resume_match(data: ResumeMatchInput):
+ from resume_intelligence import match_resume_to_job
+ return match_resume_to_job(data.resume_text,data.job_title,data.job_description)
