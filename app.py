@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse
 from pathlib import Path
 from io import BytesIO
 import asyncio, re, httpx
+from html import unescape
 from pypdf import PdfReader
 
 app=FastAPI(title="JobPilot AI",version="0.4.1")
@@ -58,13 +59,17 @@ async def analyze_resume(file:UploadFile=File(...)):
  found=sorted({x for r in scores for x in r["skills"]})
  return {"suggested_roles":[s for s in scores if s["score"]>0][:5] or scores[:3],"skills":found[:30],"extracted_characters":len(content),"note":"Resume parsed in memory and not stored on the server. Review recommendations before using."}
 
+def plain_description(value):
+ if not isinstance(value,str): return ""
+ return re.sub(r"\\s+"," ",unescape(re.sub(r"<[^>]+>"," ",value))).strip()[:10000]
+
 def normalized(provider,j,slug=""):
- if provider=="greenhouse": return {"id":str(j.get("id")),"title":j.get("title",""),"company":slug,"location":(j.get("location") or {}).get("name",""),"url":j.get("absolute_url",""),"source":provider}
- if provider=="lever": return {"id":str(j.get("id")),"title":j.get("text",""),"company":slug,"location":(j.get("categories") or {}).get("location",""),"url":j.get("hostedUrl",""),"source":provider}
- if provider=="ashby": return {"id":str(j.get("id")),"title":j.get("title",""),"company":slug,"location":j.get("location",""),"url":j.get("applyUrl") or j.get("jobUrl",""),"source":provider}
- if provider=="smartrecruiters": return {"id":str(j.get("id")),"title":j.get("name",""),"company":slug,"location":(j.get("location") or {}).get("city",""),"url":j.get("ref",""),"source":provider}
- if provider=="remotive": return {"id":str(j.get("id")),"title":j.get("title",""),"company":j.get("company_name",""),"location":j.get("candidate_required_location",""),"url":j.get("url",""),"source":provider}
- if provider=="arbeitnow": return {"id":str(j.get("slug")),"title":j.get("title",""),"company":j.get("company_name",""),"location":j.get("location",""),"url":j.get("url",""),"source":provider}
+ if provider=="greenhouse": return {"id":str(j.get("id")),"title":j.get("title",""),"company":slug,"location":(j.get("location") or {}).get("name",""),"url":j.get("absolute_url",""),"source":provider,"description":plain_description(j.get("content",""))}
+ if provider=="lever": return {"id":str(j.get("id")),"title":j.get("text",""),"company":slug,"location":(j.get("categories") or {}).get("location",""),"url":j.get("hostedUrl",""),"source":provider,"description":plain_description(j.get("descriptionPlain") or j.get("description",""))}
+ if provider=="ashby": return {"id":str(j.get("id")),"title":j.get("title",""),"company":slug,"location":j.get("location",""),"url":j.get("applyUrl") or j.get("jobUrl",""),"source":provider,"description":plain_description(j.get("descriptionPlain") or j.get("descriptionHtml","")),"remote":bool(j.get("isRemote",False))}
+ if provider=="smartrecruiters": return {"id":str(j.get("id")),"title":j.get("name",""),"company":slug,"location":(j.get("location") or {}).get("city",""),"url":j.get("ref",""),"source":provider,"description":plain_description(j.get("jobAd",""))}
+ if provider=="remotive": return {"id":str(j.get("id")),"title":j.get("title",""),"company":j.get("company_name",""),"location":j.get("candidate_required_location",""),"url":j.get("url",""),"source":provider,"description":plain_description(j.get("description","")),"remote":True}
+ if provider=="arbeitnow": return {"id":str(j.get("slug")),"title":j.get("title",""),"company":j.get("company_name",""),"location":j.get("location",""),"url":j.get("url",""),"source":provider,"description":plain_description(j.get("description","")),"remote":bool(j.get("remote",False))}
  return {}
 def clean(items):
  seen=set();res=[]
