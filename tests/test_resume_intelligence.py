@@ -39,3 +39,15 @@ def test_file_match_txt():
 def test_file_match_rejects_unsupported_type():
     response=client.post("/api/resume/match-file",files={"file":("resume.exe",b"not a resume","application/octet-stream")},data={"job_title":"Engineer"})
     assert response.status_code==415
+
+
+def test_resume_skills_do_not_leak_substrings():
+    assert "rag" not in extract_skills("dragons and storage")
+    assert "sql" not in extract_skills("NoSQL architecture")
+
+def test_alias_matching_does_not_claim_hiring_probability():
+    response = client.post("/api/resume/match", json={"resume_text":"I have built projects using retrieval-augmented generation and Python.", "job_title":"LLM Engineer", "job_description":"Experience in RAG and Docker required."})
+    assert response.status_code == 200
+    assert "rag" in response.json()["matched_skills"]
+    assert "docker" in response.json()["missing_skills"]
+    assert response.json()["requires_manual_review"] is True
