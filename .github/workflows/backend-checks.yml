@@ -3,16 +3,35 @@ on:
   push:
     branches: [main, develop]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: backend-tests-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -r requirements.txt
-      - run: python -m compileall -q app.py resume_intelligence.py job_discovery_watch.py discovery_state.py discovery_worker.py discovery_scheduler.py supabase_discovery_worker.py postgres_discovery_repository.py worker_runtime.py
-      - run: python -m pytest -q tests
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Validate installed dependencies
+        run: python -m pip check
+      - name: Compile backend modules
+        run: python -m compileall -q app.py resume_intelligence.py job_discovery_watch.py discovery_state.py discovery_worker.py discovery_scheduler.py supabase_discovery_worker.py postgres_discovery_repository.py worker_runtime.py
+      - name: Run full regression suite
+        run: python -m pytest -q tests --junitxml=test-results.xml
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-pytest-results
+          path: test-results.xml
+          if-no-files-found: ignore
+          retention-days: 7
