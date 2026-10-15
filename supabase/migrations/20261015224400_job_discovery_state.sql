@@ -59,3 +59,14 @@ grant update(read_at) on public.job_notifications to authenticated;
 -- Inserts reserved for a trusted backend worker. Users can mark only their own alerts read.
 create policy "job_notifications_select_own" on public.job_notifications for select to authenticated using ((select auth.uid()) = user_id);
 create policy "job_notifications_update_own" on public.job_notifications for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+
+-- Worker-only lease table. No browser role can read or mutate these records.
+-- A trusted worker must acquire/release leases transactionally before processing.
+create table if not exists public.discovery_worker_leases (
+ saved_search_id uuid primary key references public.saved_searches(id) on delete cascade,
+ lease_token uuid not null,
+ expires_at timestamptz not null,
+ updated_at timestamptz not null default now()
+);
+alter table public.discovery_worker_leases enable row level security;
+revoke all on public.discovery_worker_leases from anon, authenticated;
