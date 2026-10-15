@@ -24,3 +24,9 @@ def test_autosync_waits_for_successful_initial_save():
 def test_confirmed_submission_not_overwritten_by_unsent_local_data():
     html = TestClient(app).get("/").text
     assert "existing.data.submitted_at&&!payload.submitted_at" in html
+
+
+def test_empty_job_sync_is_not_marked_successful():
+    html = TestClient(app).get("/").text
+    assert "No saved applications to sync" in html
+    assert "Saved jobs can be synced to your account" in html
