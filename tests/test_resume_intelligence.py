@@ -51,3 +51,15 @@ def test_alias_matching_does_not_claim_hiring_probability():
     assert "rag" in response.json()["matched_skills"]
     assert "docker" in response.json()["missing_skills"]
     assert response.json()["requires_manual_review"] is True
+
+def test_recommendations_rank_skills_first():
+    from resume_intelligence import rank_jobs
+    jobs=[{"title":"Frontend Engineer","description":"React TypeScript","url":"https://example.com/1"},
+          {"title":"ML Engineer","description":"Python PyTorch Docker","url":"https://example.com/2"}]
+    result=rank_jobs("Python PyTorch model serving deployment experience",jobs)
+    assert result[0]["title"]=="ML Engineer"
+    assert result[0]["score"]==67
+
+def test_recommendations_api_limits_empty_jobs():
+    r=client.post("/api/resume/recommend",json={"resume_text":"Python PyTorch machine learning research and deployed models.","jobs":[]})
+    assert r.status_code==422
