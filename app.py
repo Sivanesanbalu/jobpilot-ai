@@ -61,7 +61,7 @@ async def analyze_resume(file:UploadFile=File(...)):
 
 def plain_description(value):
  if not isinstance(value,str): return ""
- return re.sub(r"\\s+"," ",unescape(re.sub(r"<[^>]+>"," ",value))).strip()[:10000]
+ return re.sub(r"\s+"," ",unescape(re.sub(r"<[^>]+>"," ",value))).strip()[:10000]
 
 def normalized(provider,j,slug=""):
  if provider=="greenhouse": return {"id":str(j.get("id")),"title":j.get("title",""),"company":slug,"location":(j.get("location") or {}).get("name",""),"url":j.get("absolute_url",""),"source":provider,"description":plain_description(j.get("content",""))}
