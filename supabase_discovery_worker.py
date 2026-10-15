@@ -35,7 +35,15 @@ async def process_search(repository, fetcher, search_id, lease_seconds=300):
         return {"status":"succeeded","new_jobs":inserted,"scanned":len(jobs)}
     except Exception as error:
         if run_id is not None:
-            await repository.fail_run(run_id,str(error)[:500])
+            try:
+                await repository.fail_run(run_id,str(error)[:500])
+            except Exception as recording_error:
+                error.add_note("Failed to record discovery run failure: " + type(recording_error).__name__)
         raise
     finally:
-        await repository.release_lease(search_id,token)
+        try:
+            await repository.release_lease(search_id,token)
+        except Exception:
+            # A TTL-backed lease expires even if release fails. Do not suppress
+            # a database error here: the caller must know cleanup was incomplete.
+            raise
