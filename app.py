@@ -226,3 +226,19 @@ async def resume_match_file(file:UploadFile=File(...),job_title:str=Form(...),jo
   raise HTTPException(422,"Invalid job requirements")
  content=await parse_resume_text(file)
  return match_resume_to_job(content,job_title,job_description)
+
+class RecommendJob(BaseModel):
+ title: str = Field(min_length=1,max_length=250)
+ company: str = Field(default="",max_length=180)
+ url: str = Field(default="",max_length=2000)
+ description: str = Field(default="",max_length=10000)
+
+class RecommendInput(BaseModel):
+ resume_text: str = Field(min_length=40,max_length=30000)
+ jobs: List[RecommendJob] = Field(min_length=1,max_length=100)
+
+@app.post("/api/resume/recommend")
+def recommend_jobs(data:RecommendInput):
+ from resume_intelligence import rank_jobs
+ return {"jobs":rank_jobs(data.resume_text,[j.model_dump() for j in data.jobs]),
+         "method":"skill_keyword_overlap","note":"Relevance is not hiring probability. Feed jobs may have incomplete descriptions."}
