@@ -62,3 +62,27 @@ def test_completion_receives_lease_token():
     result=asyncio.run(process_search(repo,fetch,"s1"))
     assert result["status"]=="succeeded"
     assert repo.released==["s1"]
+
+def test_original_fetch_error_survives_failed_status_write_and_release():
+    class BrokenCleanup(FakeRepository):
+        async def fail_run(self,run_id,error):
+            raise RuntimeError("status storage unavailable")
+        async def release_lease(self,search_id,token):
+            raise RuntimeError("lease service unavailable")
+    repo=BrokenCleanup()
+    async def failing_fetch(query):
+        raise ValueError("original job feed error")
+    with pytest.raises(ValueError,match="original job feed error") as exc:
+        asyncio.run(process_search(repo,failing_fetch,"s1"))
+    assert "Failed to record" in " ".join(exc.value.__notes__)
+    assert "Worker lease release failed" in " ".join(exc.value.__notes__)
+
+def test_release_failure_after_success_is_not_silent():
+    class BrokenRelease(FakeRepository):
+        async def release_lease(self,search_id,token):
+            raise RuntimeError("lease service unavailable")
+    repo=BrokenRelease()
+    async def fetch(query):
+        return []
+    with pytest.raises(RuntimeError,match="lease service unavailable"):
+        asyncio.run(process_search(repo,fetch,"s1"))
