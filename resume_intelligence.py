@@ -36,8 +36,14 @@ def match_resume_to_job(resume_text, job_title, job_description):
 def rank_jobs(resume_text, jobs, preferred_location="", remote_only=False, max_experience=None):
     """Skill relevance first, with transparent preference filtering and no inferred experience claims."""
     output=[]
+    seen=set()
     location=(preferred_location or "").strip().casefold()
     for job in jobs[:100]:
+        url=(job.get("url") or "").strip()
+        identity=("url",url.rstrip("/").casefold()) if url else ("role",(job.get("company") or "").strip().casefold(),(job.get("title") or "").strip().casefold(),(job.get("location") or "").strip().casefold())
+        if identity in seen:
+            continue
+        seen.add(identity)
         title=job.get("title","")
         description=job.get("description","")
         job_location=(job.get("location") or "").casefold()
@@ -50,8 +56,9 @@ def rank_jobs(resume_text, jobs, preferred_location="", remote_only=False, max_e
         if max_experience is not None and years is not None and years>max_experience:
             continue
         result=match_resume_to_job(resume_text,title,description)
-        output.append({"title":title,"company":job.get("company",""),"url":job.get("url",""),
+        output.append({"title":title,"company":job.get("company",""),"url":url,
                        "location":job.get("location",""),"remote":remote,
                        "score":result["score"],"matched_skills":result["matched_skills"],
-                       "missing_skills":result["missing_skills"],"review_required":True})
+                       "missing_skills":result["missing_skills"],"review_required":True,
+                       "explanation":("Matched "+str(len(result["matched_skills"]))+" of "+str(len(result["job_skills"]))+" recognized required skills." if result["score"] is not None else "No recognized technical requirements; ranking unavailable.")})
     return sorted(output,key=lambda x:(x["score"] is None,-(x["score"] or 0),-len(x["matched_skills"])))
