@@ -63,3 +63,23 @@ def test_recommendations_rank_skills_first():
 def test_recommendations_api_limits_empty_jobs():
     r=client.post("/api/resume/recommend",json={"resume_text":"Python PyTorch machine learning research and deployed models.","jobs":[]})
     assert r.status_code==422
+
+def test_preferences_filter_explicit_metadata_only():
+    from resume_intelligence import rank_jobs
+    jobs=[
+      {"title":"Remote ML","description":"Python PyTorch","location":"Remote","remote":True,"min_experience":1},
+      {"title":"Local ML","description":"Python","location":"Coimbatore","remote":False,"min_experience":4},
+      {"title":"Other","description":"Python","location":"Mumbai","remote":False,"min_experience":1}
+    ]
+    ranked=rank_jobs("Python PyTorch professional development experience",jobs,"Coimbatore",False,2)
+    assert [item["title"] for item in ranked]==["Remote ML"]
+    assert [item["title"] for item in rank_jobs("Python PyTorch professional development experience",jobs,remote_only=True)]==["Remote ML"]
+
+def test_recommendations_api_preferences():
+    payload={"resume_text":"Python and PyTorch ML systems developed and deployed with documentation.",
+             "remote_only":True,
+             "jobs":[{"title":"Remote ML","description":"Python","location":"Remote","remote":True},
+                     {"title":"Office ML","description":"Python","location":"Chennai"}]}
+    r=client.post("/api/resume/recommend",json=payload)
+    assert r.status_code==200
+    assert [j["title"] for j in r.json()["jobs"]]==["Remote ML"]
