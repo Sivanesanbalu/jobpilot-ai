@@ -86,3 +86,27 @@ def test_release_failure_after_success_is_not_silent():
         return []
     with pytest.raises(RuntimeError,match="lease service unavailable"):
         asyncio.run(process_search(repo,fetch,"s1"))
+
+def test_concurrent_search_attempts_only_one_acquires_lease():
+    repo=FakeRepository()
+    started=asyncio.Event()
+    proceed=asyncio.Event()
+    calls=[]
+    async def fetch(query):
+        calls.append(query)
+        started.set()
+        await proceed.wait()
+        return [{"url":"https://example.com/a","title":"AI Engineer"}]
+    async def scenario():
+        first=asyncio.create_task(process_search(repo,fetch,"s1"))
+        await started.wait()
+        second=await process_search(repo,fetch,"s1")
+        assert second=={"status":"busy","new_jobs":0}
+        proceed.set()
+        result=await first
+        return result
+    result=asyncio.run(scenario())
+    assert result["status"]=="succeeded"
+    assert len(calls)==1
+    assert len(repo.finished)==1
+    assert repo.released==["s1"]
