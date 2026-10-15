@@ -112,8 +112,8 @@ try{
  $("forgotPasswordBtn").onclick=async()=>{const email=$("authEmail").value.trim();if(!email){notice("Enter your email address first.");return}const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+"/"});notice(error?error.message:"If the email belongs to an account, recovery instructions will arrive shortly.")};
  $("changePasswordBtn").onclick=async()=>{const password=prompt("Enter a new password (at least 8 characters)");if(password===null)return;if(password.length<8){notice("Password must have at least eight characters.");return}const {error}=await sb.auth.updateUser({password});notice(error?error.message:"Password changed.")};
  $("signOutBtn").onclick=async()=>{const {error}=await sb.auth.signOut();if(error)notice(error.message)};
- $("syncProfileBtn").onclick=async()=>{syncReady=true;await sync("profile");notice("Profile synced. Auto-sync enabled for this session.")};
- $("syncApplicationsBtn").onclick=async()=>{syncReady=true;await sync("tracked");notice("Applications synced. Auto-sync enabled for this session.")};
+ $("syncProfileBtn").onclick=async()=>{syncReady=true;await sync("profile")};
+ $("syncApplicationsBtn").onclick=async()=>{syncReady=true;await sync("tracked")};
  $("cloudLoadBtn").onclick=()=>cloudLoad();
 }catch(e){notice("Account setup unavailable: "+e.message)}
 </script></body></html>
