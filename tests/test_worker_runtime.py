@@ -93,3 +93,11 @@ def test_worker_checks_private_schema_usage():
     from pathlib import Path
     source = Path(__file__).resolve().parents[1].joinpath("worker_runtime.py").read_text()
     assert "has_schema_privilege(current_user,'jobpilot_private','USAGE')" in source
+
+def test_worker_checks_all_privileges_individually():
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[1].joinpath("worker_runtime.py").read_text()
+    for permission in ("INSERT", "UPDATE", "DELETE", "SELECT"):
+        assert f"has_table_privilege(current_user,'public.discovery_worker_leases','{permission}')" in source
+    assert "has_table_privilege(current_user,'public.discovery_runs','INSERT')" in source
+    assert "has_table_privilege(current_user,'public.discovery_runs','UPDATE')" in source
