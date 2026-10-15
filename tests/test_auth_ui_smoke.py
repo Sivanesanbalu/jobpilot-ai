@@ -30,3 +30,9 @@ def test_empty_job_sync_is_not_marked_successful():
     html = TestClient(app).get("/").text
     assert "No saved applications to sync" in html
     assert "Saved jobs can be synced to your account" in html
+
+def test_ranked_jobs_render_filtered_and_deduplicated_response():
+    html = TestClient(app).get("/").text
+    assert 'results=data.jobs.map(j=>buckets.get(' in html
+    assert 'filter(Boolean)' in html
+    assert 'unique listings matching your selected preferences' in html
