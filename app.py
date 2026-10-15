@@ -200,4 +200,5 @@ def application_packet(data:ApplicationPacketInput):
               "I am interested in the "+data.job_title+" opportunity at "+data.company+"."),
          "required_review":["Verify eligibility and location requirements","Check salary, notice period and employer-specific questions","Attach your current resume","Review any declarations and consent before submission"],
          "submission_status":"NOT_SUBMITTED",
+         "ats_readiness":{"provider":provider,"verified_form_schema":False,"required_items":["Current resume attachment","Employer-specific screening answers","Consent and declarations"],"submission_supported":False,"next_action":"Open official employer site and complete application manually"},
          "note":"Draft uses only provided facts. No application was submitted, and employer form requirements were not inspected."}
