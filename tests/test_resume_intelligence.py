@@ -28,3 +28,14 @@ def test_match_api_returns_explainable_result():
 def test_match_api_rejects_too_short_resume():
     r=client.post("/api/resume/match",json={"resume_text":"Python","job_title":"Engineer"})
     assert r.status_code == 422
+
+def test_file_match_txt():
+    payload=b"Python PyTorch skills developed across practical machine learning projects and deployments."
+    response=client.post("/api/resume/match-file",files={"file":("resume.txt",payload,"text/plain")},data={"job_title":"ML Engineer","job_description":"Python PyTorch Docker"})
+    assert response.status_code==200
+    assert response.json()["score"]==67
+    assert response.json()["missing_skills"]==["docker"]
+
+def test_file_match_rejects_unsupported_type():
+    response=client.post("/api/resume/match-file",files={"file":("resume.exe",b"not a resume","application/octet-stream")},data={"job_title":"Engineer"})
+    assert response.status_code==415
