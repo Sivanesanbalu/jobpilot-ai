@@ -39,3 +39,10 @@ def test_home_uses_dashboard_file():
     from pathlib import Path
     expected = Path(__file__).resolve().parents[1].joinpath("dashboard.html").read_text(encoding="utf-8")
     assert client.get("/").text == expected
+
+
+def test_account_cache_isolation_hooks_present():
+    html = client.get("/").text
+    assert "function isolateAccount(nextId)" in html
+    assert "jp_account_owner" in html
+    assert "if(user)isolateAccount(user.id)" in html
