@@ -74,7 +74,8 @@ class WorkerRuntime:
                        has_table_privilege(current_user,'public.job_notifications','INSERT') as notifications,
                        has_table_privilege(current_user,'public.discovery_worker_leases','INSERT,UPDATE,DELETE,SELECT') as leases,
                        has_function_privilege(current_user,'jobpilot_private.acquire_discovery_lease(uuid,uuid,integer)','EXECUTE') as acquire,
-                       has_function_privilege(current_user,'jobpilot_private.release_discovery_lease(uuid,uuid)','EXECUTE') as release"""
+                       has_function_privilege(current_user,'jobpilot_private.release_discovery_lease(uuid,uuid)','EXECUTE') as release,
+                       has_schema_privilege(current_user,'jobpilot_private','USAGE') as private_schema"""
                 )
                 if not access or not all(access.values()):
                     raise RuntimeError("Worker database permissions are insufficient; refusing startup")
