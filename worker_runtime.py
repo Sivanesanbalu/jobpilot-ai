@@ -22,8 +22,12 @@ class WorkerSettings:
             raise ValueError("Valid PostgreSQL worker database URL required")
         if parsed.hostname in ("localhost", "127.0.0.1") and env.get("JOBPILOT_ALLOW_LOCAL_DB") != "1":
             raise ValueError("Local database requires explicit development opt-in")
-        if "sslmode=disable" in parsed.query.lower() and env.get("JOBPILOT_ALLOW_INSECURE_DB") != "1":
-            raise ValueError("TLS must not be disabled in production")
+        from urllib.parse import parse_qs
+        sslmodes = parse_qs(parsed.query).get("sslmode", [])
+        if any(mode.lower() in ("disable", "allow", "prefer") for mode in sslmodes):
+            raise ValueError("Worker requires TLS; insecure sslmode is not allowed")
+        if parsed.username is None or parsed.password is None:
+            raise ValueError("Worker database URL requires credentials")
         minimum = int(env.get("JOBPILOT_POOL_MIN", "1"))
         maximum = int(env.get("JOBPILOT_POOL_MAX", "5"))
         if not (1 <= minimum <= maximum <= 20):
