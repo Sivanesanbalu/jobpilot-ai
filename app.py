@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from pathlib import Path
 from io import BytesIO
@@ -30,8 +30,7 @@ def home():
 def health():
  return {"ok":True,"version":"0.4.0","storage":"browser only","applications":"manual approval"}
 
-@app.post("/api/resume/analyze")
-async def analyze_resume(file:UploadFile=File(...)):
+async def parse_resume_text(file:UploadFile):
  name=(file.filename or "").lower()
  if not name.endswith((".pdf",".txt")): raise HTTPException(415,"Upload a PDF or TXT resume.")
  raw=await file.read(4*1024*1024+1)
@@ -45,6 +44,11 @@ async def analyze_resume(file:UploadFile=File(...)):
  except HTTPException: raise
  except Exception: raise HTTPException(422,"Could not read resume. Scanned PDFs need OCR, not available yet.")
  if len(content.strip())<40: raise HTTPException(422,"Resume contains too little extractable text")
+ return content
+
+@app.post("/api/resume/analyze")
+async def analyze_resume(file:UploadFile=File(...)):
+ content=await parse_resume_text(file)
  lower=content.lower()
  scores=[]
  for role,words in ROLE_RULES.items():
@@ -213,3 +217,12 @@ class ResumeMatchInput(BaseModel):
 def resume_match(data: ResumeMatchInput):
  from resume_intelligence import match_resume_to_job
  return match_resume_to_job(data.resume_text,data.job_title,data.job_description)
+
+
+@app.post("/api/resume/match-file")
+async def resume_match_file(file:UploadFile=File(...),job_title:str=Form(...),job_description:str=Form("")):
+ from resume_intelligence import match_resume_to_job
+ if not 2<=len(job_title)<=250 or len(job_description)>20000:
+  raise HTTPException(422,"Invalid job requirements")
+ content=await parse_resume_text(file)
+ return match_resume_to_job(content,job_title,job_description)
