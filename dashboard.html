@@ -75,12 +75,13 @@ async function saveJobs(){
  }
 }
 async function sync(kind){
- if(!user||loading)return;
+ if(!user||loading)return false;
  try{
   if(kind==="profile")await saveProfile();
   if(kind==="tracked")await saveJobs();
   notice("Cloud "+(kind==="profile"?"profile":"applications")+" saved successfully.");
- }catch(e){notice("Sync failed: "+e.message)}
+  return true;
+ }catch(e){notice("Sync failed: "+e.message);return false}
 }
 function queueSync(kind){
  if(!syncReady||!user||loading||!["profile","tracked"].includes(kind))return;
@@ -112,8 +113,8 @@ try{
  $("forgotPasswordBtn").onclick=async()=>{const email=$("authEmail").value.trim();if(!email){notice("Enter your email address first.");return}const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+"/"});notice(error?error.message:"If the email belongs to an account, recovery instructions will arrive shortly.")};
  $("changePasswordBtn").onclick=async()=>{const password=prompt("Enter a new password (at least 8 characters)");if(password===null)return;if(password.length<8){notice("Password must have at least eight characters.");return}const {error}=await sb.auth.updateUser({password});notice(error?error.message:"Password changed.")};
  $("signOutBtn").onclick=async()=>{const {error}=await sb.auth.signOut();if(error)notice(error.message)};
- $("syncProfileBtn").onclick=async()=>{syncReady=true;await sync("profile")};
- $("syncApplicationsBtn").onclick=async()=>{syncReady=true;await sync("tracked")};
+ $("syncProfileBtn").onclick=async()=>{if(await sync("profile"))syncReady=true};
+ $("syncApplicationsBtn").onclick=async()=>{if(await sync("tracked"))syncReady=true};
  $("cloudLoadBtn").onclick=()=>cloudLoad();
 }catch(e){notice("Account setup unavailable: "+e.message)}
 </script></body></html>
