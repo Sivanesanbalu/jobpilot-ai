@@ -33,3 +33,9 @@ def test_private_url_rejected_without_fetching():
         "apply_url": "https://127.0.0.1/private",
     })
     assert response.status_code == 422
+
+
+def test_home_uses_dashboard_file():
+    from pathlib import Path
+    expected = Path(__file__).resolve().parents[1].joinpath("dashboard.html").read_text(encoding="utf-8")
+    assert client.get("/").text == expected
