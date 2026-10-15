@@ -109,7 +109,7 @@ async def discover(q:str="engineer",limit:int=80):
  return {"jobs":jobs,"count":len(jobs),"sources":{"remotive":len(a),"arbeitnow":len(b)},"note":"Public job feeds are not comprehensive. Some sources may temporarily be unavailable."}
 
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 class MatchingInput(BaseModel):
  skills: List[str] = Field(default_factory=list,max_length=100)
