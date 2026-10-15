@@ -26,3 +26,13 @@ def test_invalid_resume_format_rejected():
 def test_public_configuration_has_no_secret_key():
  keys=set(client.get("/api/public-config").json())
  assert keys=={"url","publishable_key"}
+
+def test_application_packet_is_draft_only():
+ r=client.post("/api/application/packet",json={"company":"Example Co","job_title":"AI Engineer","apply_url":"https://example.com/jobs/123","full_name":"Applicant"})
+ assert r.status_code==200
+ assert r.json()["submission_status"]=="NOT_SUBMITTED"
+ assert "email" in r.json()["missing_fields"]
+
+def test_application_packet_rejects_insecure_url():
+ r=client.post("/api/application/packet",json={"company":"Example Co","job_title":"AI Engineer","apply_url":"http://example.com/apply"})
+ assert r.status_code==422
