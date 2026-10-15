@@ -50,3 +50,20 @@ def test_ats_readiness_does_not_claim_submission():
  assert r.status_code==200
  assert r.json()["ats_readiness"]["verified_form_schema"] is False
  assert r.json()["ats_readiness"]["submission_supported"] is False
+
+
+def test_health_reflects_optional_cloud_sync():
+    payload=client.get("/api/health").json()
+    assert payload["version"]=="0.4.1"
+    assert "optional authenticated cloud sync" in payload["storage"]
+
+
+def test_invalid_resume_upload_too_large():
+    payload=b"P"*(4*1024*1024+1)
+    result=client.post("/api/resume/analyze",files={"file":("resume.txt",payload,"text/plain")})
+    assert result.status_code==413
+
+
+def test_recommendation_rejects_invalid_experience_limit():
+    payload={"resume_text":"Python machine learning engineering with development experience and practice.", "jobs":[{"title":"Engineer"}],"max_experience":-1}
+    assert client.post("/api/resume/recommend",json=payload).status_code==422
