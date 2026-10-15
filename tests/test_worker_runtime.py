@@ -19,9 +19,10 @@ def test_insecure_local_database_requires_opt_in():
         WorkerSettings.from_env({"JOBPILOT_WORKER_DATABASE_URL":"postgresql://u:p@localhost/db"})
 
 class FakePool:
-    def __init__(self, healthy=True, migrations=True):
+    def __init__(self, healthy=True, migrations=True, permissions=True):
         self.healthy=healthy
         self.migrations=migrations
+        self.permissions=permissions
         self.closed=False
     @asynccontextmanager
     async def acquire(self):
@@ -31,7 +32,7 @@ class FakePool:
             raise OSError("database unreachable")
         return 1
     async def fetchrow(self, query):
-        return {key:self.migrations for key in ("searches","runs","notifications","leases","acquire","release")}
+        return {key:(self.permissions if "has_table_privilege" in query else self.migrations) for key in ("searches","runs","notifications","leases","acquire","release")}
     async def close(self):
         self.closed=True
 
