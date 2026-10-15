@@ -9,7 +9,7 @@
 <div class="wrap hide" id="pricing"><div class="eyebrow">Simple pricing</div><h1>Choose your JobPilot plan</h1><p class="sub">Plan previews only — billing checkout isn't enabled yet, and no payment will be collected.</p><div class="grid"><div class="card"><h2>Free</h2><div class="price">₹0</div><p class="sub">Explore public job discovery and local application tracking.</p><button onclick="show('onboarding')">Start free</button></div><div class="card"><h2>Pro — planned</h2><div class="price">Coming soon</div><p class="sub">Cloud profiles, saved searches, recommendations and workflow automation.</p><button class="secondary" disabled>Not available</button></div><div class="card"><h2>Teams — planned</h2><div class="price">Contact us</div><p class="sub">Team-level reporting and organization management are on the roadmap.</p><button class="secondary" disabled>Not available</button></div></div></div>
 <section class="wrap" id="accountPanel"><div class="card"><h2>🔐 Your JobPilot account</h2><p class="sub">Create an account to sync your profile and applications securely across devices. Email verification may be required.</p><div id="accountLoggedOut"><div class="toolbar"><input id="authEmail" type="email" placeholder="Email address" autocomplete="email"><input id="authPassword" type="password" placeholder="Password (at least 8 characters)" autocomplete="current-password"></div><div class="toolbar"><button id="signUpBtn">Create account</button><button class="secondary" id="signInBtn">Sign in</button></div></div><div id="accountLoggedIn" class="hide"><p id="accountUser"></p><div class="toolbar"><button id="syncProfileBtn">Sync profile to cloud</button><button id="syncApplicationsBtn">Sync saved applications</button><button class="secondary" id="cloudLoadBtn">Load my cloud data</button><button class="secondary" id="signOutBtn">Sign out</button></div></div><p id="authMessage" class="sub" role="status"></p></div></section><footer>JobPilot AI © 2026 · Public job discovery · No guaranteed placement · Apply through official employer sites</footer>
 <script>
-const sections=['landing','onboarding','dashboard','pricing'];const $=id=>document.getElementById(id);const get=(key,def)=>{try{return JSON.parse(localStorage.getItem('jp_'+key))??def}catch{return def}};const put=(key,val)=>localStorage.setItem('jp_'+key,JSON.stringify(val));let profile=get('profile',{}),tracked=get('tracked',[]),roles=get('roles',[]),results=[];
+const sections=['landing','onboarding','dashboard','pricing'];const $=id=>document.getElementById(id);const get=(key,def)=>{try{return JSON.parse(localStorage.getItem('jp_'+key))??def}catch{return def}};const put=(key,val)=>{localStorage.setItem('jp_'+key,JSON.stringify(val));window.dispatchEvent(new CustomEvent('jobpilot-local-change',{detail:{key}}))};let profile=get('profile',{}),tracked=get('tracked',[]),roles=get('roles',[]),results=[];
 function show(which){for(const s of sections)$(s).classList.toggle('hide',s!==which);window.scrollTo(0,0);refresh()}
 function tab(t,b){show('dashboard');for(const id of ['overview','jobs','applications'])$(id).classList.toggle('hide',t!==id);document.querySelectorAll('.sidebar button').forEach(x=>x.classList.remove('active'));if(b)b.classList.add('active');if(t==='applications')renderTracked()}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -22,21 +22,89 @@ function renderTracked(){let root=$('tracked');root.replaceChildren();if(!tracke
 refresh();
 </script><script type="module">
 import {createClient} from "https://esm.sh/@supabase/supabase-js@2.57.4";
-let client=null;let session=null;
-const msg=(text)=>{document.getElementById("authMessage").textContent=text};
+let sb=null,user=null,syncReady=false,syncTimer=0,loading=false;
+const $=id=>document.getElementById(id);
+const notice=t=>{$("authMessage").textContent=t};
+const profile=()=>JSON.parse(localStorage.getItem("jp_profile")||"{}");
+const jobs=()=>JSON.parse(localStorage.getItem("jp_tracked")||"[]");
+const setLocal=(k,v)=>localStorage.setItem("jp_"+k,JSON.stringify(v));
+const statusToDb={Saved:"saved",Applied:"submitted",Interview:"interview",Offer:"offer",Rejected:"rejected"};
+const statusFromDb={saved:"Saved",submitted:"Applied",interview:"Interview",offer:"Offer",rejected:"Rejected",ready_for_review:"Saved"};
+async function cloudLoad(){
+ if(!user||loading)return;
+ loading=true;
+ try {
+  const [p,a]=await Promise.all([
+   sb.from("profiles").select("*").eq("user_id",user.id).maybeSingle(),
+   sb.from("applications").select("*").eq("user_id",user.id).order("created_at",{ascending:false})]);
+  if(p.error||a.error)throw(p.error||a.error);
+  if(p.data)setLocal("profile",{...profile(),name:p.data.full_name||"",location:p.data.location||"",roles:(p.data.preferred_roles||[]).join(", "),experience:p.data.years_experience});
+  setLocal("tracked",a.data.map(x=>({company:x.company,title:x.title,url:x.apply_url,status:statusFromDb[x.status]||"Saved"})));
+  if(typeof refresh==="function")refresh();
+  notice("Cloud data loaded. Auto-sync is ready after you enable it below.");
+ }catch(e){notice("Cloud load failed: "+e.message)}
+ finally{loading=false}
+}
+function display(){
+ $("accountLoggedOut").classList.toggle("hide",!!user);
+ $("accountLoggedIn").classList.toggle("hide",!user);
+ $("accountUser").textContent=user?"Signed in as "+user.email:"";
+}
+async function saveProfile(){
+ if(!user)return;
+ const p=profile();
+ const {error}=await sb.from("profiles").upsert({user_id:user.id,full_name:p.name||"",location:p.location||"",preferred_roles:(p.roles||"").split(",").map(s=>s.trim()).filter(Boolean),years_experience:p.experience?Number(p.experience):null,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+ if(error)throw error;
+}
+async function saveJobs(){
+ if(!user)return;
+ for(const j of jobs()){
+  if(!j.url||!j.url.startsWith("https://"))continue;
+  const {data:existing,error:readError}=await sb.from("applications").select("id").eq("user_id",user.id).eq("apply_url",j.url).limit(1);
+  if(readError)throw readError;
+  const payload={user_id:user.id,company:j.company||"Unknown",title:j.title||"Untitled",apply_url:j.url,status:statusToDb[j.status]||"saved"};
+  const result=existing.length?
+    await sb.from("applications").update(payload).eq("id",existing[0].id).eq("user_id",user.id):
+    await sb.from("applications").insert(payload);
+  if(result.error)throw result.error;
+ }
+}
+async function sync(kind){
+ if(!user||loading)return;
+ try{
+  if(kind==="profile")await saveProfile();
+  if(kind==="tracked")await saveJobs();
+  notice("Cloud "+(kind==="profile"?"profile":"applications")+" saved successfully.");
+ }catch(e){notice("Sync failed: "+e.message)}
+}
+function queueSync(kind){
+ if(!syncReady||!user||loading||!["profile","tracked"].includes(kind))return;
+ clearTimeout(syncTimer);
+ syncTimer=setTimeout(()=>sync(kind),1200);
+}
+window.addEventListener("jobpilot-local-change",e=>queueSync(e.detail.key));
 try{
- const r=await fetch("/api/public-config");const c=await r.json();
- if(!r.ok||!c.url||!c.publishable_key)throw Error("Cloud accounts not configured.");
- client=createClient(c.url,c.publishable_key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
- const {data}=await client.auth.getSession();session=data.session;
- function display(){document.getElementById("accountLoggedOut").classList.toggle("hide",!!session);document.getElementById("accountLoggedIn").classList.toggle("hide",!session);document.getElementById("accountUser").textContent=session?"Signed in as "+session.user.email:"";}
- display();
- client.auth.onAuthStateChange((_event,newSession)=>{session=newSession;display()});
- document.getElementById("signUpBtn").onclick=async()=>{const email=document.getElementById("authEmail").value.trim(),password=document.getElementById("authPassword").value;if(password.length<8){msg("Use a password of at least 8 characters.");return}const {error,data}=await client.auth.signUp({email,password});msg(error?error.message:data.session?"Account created and signed in.":"Check your email to confirm signup.")};
- document.getElementById("signInBtn").onclick=async()=>{const {error}=await client.auth.signInWithPassword({email:document.getElementById("authEmail").value.trim(),password:document.getElementById("authPassword").value});msg(error?error.message:"Signed in.")};
- document.getElementById("signOutBtn").onclick=async()=>{await client.auth.signOut();msg("Signed out. Browser-local data remains on this device.")};
- document.getElementById("syncProfileBtn").onclick=async()=>{if(!session)return;const p=JSON.parse(localStorage.getItem("jp_profile")||"{}");const roles=(p.roles||"").split(",").map(x=>x.trim()).filter(Boolean);const {error}=await client.from("profiles").upsert({user_id:session.user.id,full_name:p.name||"",location:p.location||"",preferred_roles:roles,years_experience:p.experience?Number(p.experience):null,updated_at:new Date().toISOString()},{onConflict:"user_id"});msg(error?"Profile sync failed: "+error.message:"Profile saved securely to your account.")};
- document.getElementById("syncApplicationsBtn").onclick=async()=>{if(!session)return;const list=JSON.parse(localStorage.getItem("jp_tracked")||"[]");let count=0;for(const j of list){const {data:existing,error:readError}=await client.from("applications").select("id").eq("user_id",session.user.id).eq("apply_url",j.url).limit(1);if(readError){msg(readError.message);return}if(existing.length)continue;const statuses={Saved:"saved",Applied:"submitted",Interview:"interview",Offer:"offer",Rejected:"rejected"};const {error}=await client.from("applications").insert({user_id:session.user.id,company:j.company||"Unknown",title:j.title||"Untitled",apply_url:j.url,status:statuses[j.status]||"saved"});if(error){msg("Sync stopped: "+error.message);return}count++}msg(count+" new applications saved to your account. Existing records were preserved.")};
- document.getElementById("cloudLoadBtn").onclick=async()=>{if(!session)return;const [p,a]=await Promise.all([client.from("profiles").select("*").eq("user_id",session.user.id).maybeSingle(),client.from("applications").select("*").eq("user_id",session.user.id).order("created_at",{ascending:false})]);if(p.error||a.error){msg((p.error||a.error).message);return}const local=JSON.parse(localStorage.getItem("jp_profile")||"{}");if(p.data){const value={...local,name:p.data.full_name,location:p.data.location,roles:(p.data.preferred_roles||[]).join(", "),experience:p.data.years_experience};localStorage.setItem("jp_profile",JSON.stringify(value))}const jobs=a.data.map(x=>({company:x.company,title:x.title,url:x.apply_url,status:({saved:"Saved",submitted:"Applied",interview:"Interview",offer:"Offer",rejected:"Rejected"})[x.status]||"Saved"}));localStorage.setItem("jp_tracked",JSON.stringify(jobs));msg("Cloud records loaded. Refresh the page to display them.")};
-}catch(e){msg("Account setup unavailable: "+e.message)}
+ const config=await fetch("/api/public-config").then(r=>r.json());
+ if(!config.url||!config.publishable_key)throw Error("Cloud accounts not configured.");
+ sb=createClient(config.url,config.publishable_key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+ const {data}=await sb.auth.getUser();user=data.user;display();
+ if(user)await cloudLoad();
+ sb.auth.onAuthStateChange((event,session)=>{
+  const changed=user?.id!==session?.user?.id;
+  user=session?.user||null;syncReady=false;clearTimeout(syncTimer);display();
+  if(event==="SIGNED_IN"&&changed)queueMicrotask(()=>cloudLoad());
+  if(event==="SIGNED_OUT"){setLocal("tracked",[]);setLocal("profile",{});if(typeof refresh==="function")refresh();notice("Signed out; local account data cleared.")}
+ });
+ $("signUpBtn").onclick=async()=>{
+  const email=$("authEmail").value.trim(),password=$("authPassword").value;
+  if(password.length<8){notice("Password must have at least eight characters.");return}
+  const {error,data}=await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+"/"}});
+  notice(error?error.message:data.session?"Signed up and signed in.":"Check your email to verify your account.");
+ };
+ $("signInBtn").onclick=async()=>{const {error}=await sb.auth.signInWithPassword({email:$("authEmail").value.trim(),password:$("authPassword").value});notice(error?error.message:"Signed in. Cloud data is being loaded.")};
+ $("signOutBtn").onclick=async()=>{const {error}=await sb.auth.signOut();if(error)notice(error.message)};
+ $("syncProfileBtn").onclick=async()=>{syncReady=true;await sync("profile");notice("Profile synced. Auto-sync enabled for this session.")};
+ $("syncApplicationsBtn").onclick=async()=>{syncReady=true;await sync("tracked");notice("Applications synced. Auto-sync enabled for this session.")};
+ $("cloudLoadBtn").onclick=()=>cloudLoad();
+}catch(e){notice("Account setup unavailable: "+e.message)}
 </script></body></html>
