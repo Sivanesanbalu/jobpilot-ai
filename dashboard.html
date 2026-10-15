@@ -33,6 +33,8 @@ const notice=t=>{$("authMessage").textContent=t};
 const profile=()=>JSON.parse(localStorage.getItem("jp_profile")||"{}");
 const jobs=()=>JSON.parse(localStorage.getItem("jp_tracked")||"[]");
 const setLocal=(k,v)=>localStorage.setItem("jp_"+k,JSON.stringify(v));
+function isolateAccount(nextId){const old=localStorage.getItem("jp_account_owner");if(old&&old!==nextId){setLocal("profile",{});setLocal("tracked",[]);setLocal("roles",[])}localStorage.setItem("jp_account_owner",nextId)}
+
 const statusToDb={Saved:"saved",Applied:"submitted",Interview:"interview",Offer:"offer",Rejected:"rejected"};
 const statusFromDb={saved:"Saved",submitted:"Applied",interview:"Interview",offer:"Offer",rejected:"Rejected",ready_for_review:"Saved"};
 async function cloudLoad(){
@@ -88,13 +90,13 @@ try{
  const config=await fetch("/api/public-config").then(r=>r.json());
  if(!config.url||!config.publishable_key)throw Error("Cloud accounts not configured.");
  sb=createClient(config.url,config.publishable_key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
- const {data}=await sb.auth.getUser();user=data.user;display();
+ const {data}=await sb.auth.getUser();user=data.user;if(user)isolateAccount(user.id);display();
  if(user)await cloudLoad();
  sb.auth.onAuthStateChange((event,session)=>{
   const changed=user?.id!==session?.user?.id;
-  user=session?.user||null;syncReady=false;clearTimeout(syncTimer);display();
+  user=session?.user||null;if(user)isolateAccount(user.id);syncReady=false;clearTimeout(syncTimer);display();
   if(event==="SIGNED_IN"&&changed)queueMicrotask(()=>cloudLoad());
-  if(event==="SIGNED_OUT"){setLocal("tracked",[]);setLocal("profile",{});sessionStorage.removeItem("jp_cloud_loaded");location.reload()}
+  if(event==="SIGNED_OUT"){localStorage.removeItem("jp_account_owner");setLocal("tracked",[]);setLocal("profile",{});setLocal("roles",[]);sessionStorage.removeItem("jp_cloud_loaded");location.reload()}
  });
  $("signUpBtn").onclick=async()=>{
   const email=$("authEmail").value.trim(),password=$("authPassword").value;
