@@ -32,3 +32,13 @@ def match_resume_to_job(resume_text, job_title, job_description):
             "resume_skills": sorted(resume_skills), "job_skills": sorted(requested),
             "method": "skill_keyword_overlap", "requires_manual_review": True,
             "disclaimer": "This is a keyword relevance estimate, not an ATS score or hiring prediction. No resume data is retained."}
+
+def rank_jobs(resume_text, jobs):
+    """Rank at most 100 jobs by observed skill overlap; unscorable jobs go last."""
+    output=[]
+    for job in jobs[:100]:
+        result=match_resume_to_job(resume_text,job.get("title",""),job.get("description",""))
+        output.append({"title":job.get("title",""),"company":job.get("company",""),"url":job.get("url",""),
+                       "score":result["score"],"matched_skills":result["matched_skills"],
+                       "missing_skills":result["missing_skills"],"review_required":True})
+    return sorted(output,key=lambda x:(x["score"] is None,-(x["score"] or 0),-len(x["matched_skills"])))
