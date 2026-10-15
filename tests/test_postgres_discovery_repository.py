@@ -19,3 +19,9 @@ def test_repository_guards_rerun_and_invalid_leases():
     import pytest
     with pytest.raises(ValueError):
         asyncio.run(repository.acquire_lease("00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002",5))
+
+def test_stale_lease_is_fenced_inside_transaction():
+    assert "lease_token=$2" in SOURCE
+    assert "expires_at > clock_timestamp()" in SOURCE
+    assert "Worker lease expired or was superseded" in SOURCE
+    assert "async def complete_run(self, run_id, jobs, lease_token)" in SOURCE
