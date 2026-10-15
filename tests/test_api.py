@@ -43,3 +43,10 @@ def test_ats_provider_recognition():
  assert ats_provider_for_url("https://jobs.lever.co/acme/123")=="lever"
  assert ats_provider_for_url("https://jobs.ashbyhq.com/acme/123")=="ashby"
  assert ats_provider_for_url("https://example.com/job")=="external"
+
+
+def test_ats_readiness_does_not_claim_submission():
+ r=client.post("/api/application/packet",json={"company":"Example","job_title":"Engineer","apply_url":"https://jobs.lever.co/example/123"})
+ assert r.status_code==200
+ assert r.json()["ats_readiness"]["verified_form_schema"] is False
+ assert r.json()["ats_readiness"]["submission_supported"] is False
