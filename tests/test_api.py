@@ -36,3 +36,10 @@ def test_application_packet_is_draft_only():
 def test_application_packet_rejects_insecure_url():
  r=client.post("/api/application/packet",json={"company":"Example Co","job_title":"AI Engineer","apply_url":"http://example.com/apply"})
  assert r.status_code==422
+
+
+def test_ats_provider_recognition():
+ from app import ats_provider_for_url
+ assert ats_provider_for_url("https://jobs.lever.co/acme/123")=="lever"
+ assert ats_provider_for_url("https://jobs.ashbyhq.com/acme/123")=="ashby"
+ assert ats_provider_for_url("https://example.com/job")=="external"
