@@ -53,3 +53,14 @@ def test_failed_start_closes_pool():
         asyncio.run(runtime.start())
     assert pool.closed is True
     assert runtime.pool is None
+
+def test_rejects_unsafe_sslmode_even_with_old_override():
+    for sslmode in ("disable", "allow", "prefer"):
+        env={"JOBPILOT_WORKER_DATABASE_URL":f"postgresql://u:p@db.example.com/db?sslmode={sslmode}",
+             "JOBPILOT_ALLOW_INSECURE_DB":"1"}
+        with pytest.raises(ValueError, match="TLS"):
+            WorkerSettings.from_env(env)
+
+def test_requires_database_credentials():
+    with pytest.raises(ValueError,match="credentials"):
+        WorkerSettings.from_env({"JOBPILOT_WORKER_DATABASE_URL":"postgresql://db.example.com/db"})
