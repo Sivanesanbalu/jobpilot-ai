@@ -5,7 +5,7 @@ from io import BytesIO
 import asyncio, re, httpx
 from pypdf import PdfReader
 
-app=FastAPI(title="JobPilot AI",version="0.4.0")
+app=FastAPI(title="JobPilot AI",version="0.4.1")
 BOARDS={
  "greenhouse":("https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true","jobs"),
  "lever":("https://api.lever.co/v0/postings/{slug}?mode=json",None),
@@ -28,7 +28,7 @@ def home():
  return Path(__file__).with_name("dashboard.html").read_text(encoding="utf-8")
 @app.get("/api/health")
 def health():
- return {"ok":True,"version":"0.4.0","storage":"browser only","applications":"manual approval"}
+ return {"ok":True,"version":"0.4.1","storage":"browser plus optional authenticated cloud sync","applications":"manual approval"}
 
 async def parse_resume_text(file:UploadFile):
  name=(file.filename or "").lower()
@@ -145,8 +145,8 @@ def supabase_integration_status():
  endpoint=os.getenv("SUPABASE_URL","")
  return {"configured":bool(endpoint and os.getenv("SUPABASE_PUBLISHABLE_KEY")),
          "project":"jobpilot-ai-production" if "sorwxnhjfwnbjuyxsota.supabase.co" in endpoint else None,
-         "auth_live":False,
-         "note":"Supabase credentials configured; authenticated user flows are not yet enabled."}
+         "auth_live":bool(endpoint and os.getenv("SUPABASE_PUBLISHABLE_KEY")),
+         "note":"Supabase client configuration present; provider sign-in and persistence must be verified independently."}
 
 @app.get("/api/public-config")
 def public_config():
