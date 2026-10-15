@@ -61,12 +61,8 @@ async function saveJobs(){
  if(!user)return;
  for(const j of jobs()){
   if(!j.url||!j.url.startsWith("https://"))continue;
-  const {data:existing,error:readError}=await sb.from("applications").select("id").eq("user_id",user.id).eq("apply_url",j.url).limit(1);
-  if(readError)throw readError;
   const payload={user_id:user.id,company:j.company||"Unknown",title:j.title||"Untitled",apply_url:j.url,status:statusToDb[j.status]||"saved"};
-  const result=existing.length?
-    await sb.from("applications").update(payload).eq("id",existing[0].id).eq("user_id",user.id):
-    await sb.from("applications").insert(payload);
+  const result=await sb.from("applications").upsert(payload,{onConflict:"user_id,apply_url"});
   if(result.error)throw result.error;
  }
 }
