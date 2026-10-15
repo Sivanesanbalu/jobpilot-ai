@@ -4,6 +4,7 @@ No credentials, network connection or scheduler are started by importing this mo
 The repository implementation must atomically implement lease and completion operations.
 """
 from uuid import uuid4
+import sys
 from job_discovery_watch import canonical_url
 from discovery_worker import fetch_with_retry
 
@@ -41,9 +42,11 @@ async def process_search(repository, fetcher, search_id, lease_seconds=300):
                 error.add_note("Failed to record discovery run failure: " + type(recording_error).__name__)
         raise
     finally:
+        active_error = sys.exc_info()[1]
         try:
             await repository.release_lease(search_id,token)
-        except Exception:
-            # A TTL-backed lease expires even if release fails. Do not suppress
-            # a database error here: the caller must know cleanup was incomplete.
-            raise
+        except Exception as release_error:
+            if active_error is not None:
+                active_error.add_note("Worker lease release failed: " + type(release_error).__name__)
+            else:
+                raise
