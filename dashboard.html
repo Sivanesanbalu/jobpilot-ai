@@ -70,6 +70,9 @@ async function saveJobs(){
  for(const j of jobs()){
   if(!j.url||!j.url.startsWith("https://"))continue;
   const payload={user_id:user.id,company:j.company||"Unknown",title:j.title||"Untitled",apply_url:j.url,status:statusToDb[j.status]||"saved",confirmation_ref:j.confirmation_ref||null,submitted_at:j.submitted_at||null};
+  const existing=await sb.from("applications").select("status,confirmation_ref,submitted_at").eq("user_id",user.id).eq("apply_url",j.url).maybeSingle();
+  if(existing.error)throw existing.error;
+  if(existing.data&&existing.data.submitted_at&&!payload.submitted_at){notice("Skipped older local record for "+(j.company||"job")+"; cloud has a confirmed submission.");continue}
   const result=await sb.from("applications").upsert(payload,{onConflict:"user_id,apply_url"});
   if(result.error)throw result.error;
  }
