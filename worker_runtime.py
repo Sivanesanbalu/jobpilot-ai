@@ -56,6 +56,17 @@ class WorkerRuntime:
         try:
             async with self.pool.acquire() as conn:
                 await conn.fetchval("select 1")
+                required = await conn.fetchrow(
+                    """select
+                       to_regclass('public.saved_searches') is not null as searches,
+                       to_regclass('public.discovery_runs') is not null as runs,
+                       to_regclass('public.job_notifications') is not null as notifications,
+                       to_regclass('public.discovery_worker_leases') is not null as leases,
+                       to_regprocedure('jobpilot_private.acquire_discovery_lease(uuid,uuid,integer)') is not null as acquire,
+                       to_regprocedure('jobpilot_private.release_discovery_lease(uuid,uuid)') is not null as release"""
+                )
+                if not required or not all(required.values()):
+                    raise RuntimeError("Worker migrations are missing; refusing startup")
         except Exception:
             await self.pool.close()
             self.pool = None
