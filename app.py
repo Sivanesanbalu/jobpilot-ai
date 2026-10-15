@@ -168,15 +168,32 @@ class ApplicationPacketInput(BaseModel):
  job_title: str = Field(min_length=1,max_length=250)
  apply_url: str = Field(min_length=8,max_length=2000)
 
+def ats_provider_for_url(url:str)->str:
+ from urllib.parse import urlsplit
+ import ipaddress
+ parsed=urlsplit(url)
+ host=(parsed.hostname or "").lower().rstrip(".")
+ if parsed.scheme!="https" or not host or parsed.username or parsed.password:
+  raise HTTPException(422,"Valid HTTPS application URL required")
+ try:
+  ipaddress.ip_address(host)
+  raise HTTPException(422,"IP-address application URLs are not supported")
+ except ValueError:
+  pass
+ if host in ("localhost",) or host.endswith((".local",".internal")):
+  raise HTTPException(422,"Private hostnames are not supported")
+ suffixes={"greenhouse":("boards.greenhouse.io","job-boards.greenhouse.io"),"lever":("jobs.lever.co",),"ashby":("jobs.ashbyhq.com",),"smartrecruiters":("jobs.smartrecruiters.com",)}
+ for provider,domains in suffixes.items():
+  if host in domains:return provider
+ return "external"
+
 @app.post("/api/application/packet")
 def application_packet(data:ApplicationPacketInput):
  from urllib.parse import urlsplit
- parsed=urlsplit(data.apply_url)
- if parsed.scheme!="https" or not parsed.netloc or parsed.username or parsed.password:
-  raise HTTPException(status_code=422,detail="A valid HTTPS employer application URL is required")
+ provider=ats_provider_for_url(data.apply_url)
  fields={"full_name":data.full_name.strip(),"email":data.email.strip(),"phone":data.phone.strip(),"location":data.location.strip(),"years_experience":data.years_experience.strip()}
  missing=[key for key,value in fields.items() if not value]
- return {"role":data.job_title,"company":data.company,"apply_url":data.apply_url,
+ return {"role":data.job_title,"company":data.company,"apply_url":data.apply_url,"ats_provider":provider,
          "candidate_fields":fields,"missing_fields":missing,
          "suggested_intro":("I am interested in the "+data.job_title+" opportunity at "+data.company+"."
             +" My preferred roles include "+data.preferred_roles.strip()+"." if data.preferred_roles.strip() else
