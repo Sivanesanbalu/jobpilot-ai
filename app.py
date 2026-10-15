@@ -253,3 +253,14 @@ def recommend_jobs(data:RecommendInput):
  from resume_intelligence import rank_jobs
  return {"jobs":rank_jobs(data.resume_text,[j.model_dump() for j in data.jobs],data.preferred_location,data.remote_only,data.max_experience),
          "method":"skill_keyword_overlap","note":"Relevance is not hiring probability. Feed jobs may have incomplete descriptions."}
+
+class JobWatchInput(BaseModel):
+ known_urls: List[str] = Field(default_factory=list,max_length=1000)
+ jobs: List[RecommendJob] = Field(min_length=1,max_length=100)
+
+@app.post("/api/jobs/changes")
+def job_changes(data:JobWatchInput):
+ from job_discovery_watch import new_job_matches
+ fresh=new_job_matches(data.known_urls,[j.model_dump() for j in data.jobs])
+ return {"new_jobs":fresh,"count":len(fresh),"notifications_sent":False,
+         "note":"Change detection only. Scheduled execution and notifications are not enabled."}
