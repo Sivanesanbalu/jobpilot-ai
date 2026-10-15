@@ -19,8 +19,9 @@ def test_insecure_local_database_requires_opt_in():
         WorkerSettings.from_env({"JOBPILOT_WORKER_DATABASE_URL":"postgresql://u:p@localhost/db"})
 
 class FakePool:
-    def __init__(self, healthy=True):
+    def __init__(self, healthy=True, migrations=True):
         self.healthy=healthy
+        self.migrations=migrations
         self.closed=False
     @asynccontextmanager
     async def acquire(self):
@@ -29,6 +30,8 @@ class FakePool:
         if not self.healthy:
             raise OSError("database unreachable")
         return 1
+    async def fetchrow(self, query):
+        return {key:self.migrations for key in ("searches","runs","notifications","leases","acquire","release")}
     async def close(self):
         self.closed=True
 
@@ -64,3 +67,13 @@ def test_rejects_unsafe_sslmode_even_with_old_override():
 def test_requires_database_credentials():
     with pytest.raises(ValueError,match="credentials"):
         WorkerSettings.from_env({"JOBPILOT_WORKER_DATABASE_URL":"postgresql://db.example.com/db"})
+
+def test_missing_database_migrations_prevent_worker_start():
+    pool=FakePool(migrations=False)
+    async def factory(**kwargs):
+        return pool
+    runtime=WorkerRuntime(WorkerSettings("postgresql://u:p@db.example.com/db"),factory)
+    with pytest.raises(RuntimeError, match="Worker migrations are missing"):
+        asyncio.run(runtime.start())
+    assert runtime.pool is None
+    assert pool.closed is True
