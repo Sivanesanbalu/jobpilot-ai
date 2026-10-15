@@ -145,7 +145,7 @@ def supabase_integration_status():
  endpoint=os.getenv("SUPABASE_URL","")
  return {"configured":bool(endpoint and os.getenv("SUPABASE_PUBLISHABLE_KEY")),
          "project":"jobpilot-ai-production" if "sorwxnhjfwnbjuyxsota.supabase.co" in endpoint else None,
-         "auth_live":bool(endpoint and os.getenv("SUPABASE_PUBLISHABLE_KEY")),
+         "auth_live":False,
          "note":"Supabase client configuration present; provider sign-in and persistence must be verified independently."}
 
 @app.get("/api/public-config")
