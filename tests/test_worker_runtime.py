@@ -78,3 +78,13 @@ def test_missing_database_migrations_prevent_worker_start():
         asyncio.run(runtime.start())
     assert runtime.pool is None
     assert pool.closed is True
+
+def test_missing_database_privileges_prevent_worker_start():
+    pool=FakePool(permissions=False)
+    async def factory(**kwargs):
+        return pool
+    runtime=WorkerRuntime(WorkerSettings("postgresql://u:p@db.example.com/db"),factory)
+    with pytest.raises(RuntimeError, match="database permissions are insufficient"):
+        asyncio.run(runtime.start())
+    assert pool.closed is True
+    assert runtime.pool is None
