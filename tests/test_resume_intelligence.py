@@ -83,3 +83,18 @@ def test_recommendations_api_preferences():
     r=client.post("/api/resume/recommend",json=payload)
     assert r.status_code==200
     assert [j["title"] for j in r.json()["jobs"]]==["Remote ML"]
+
+def test_recommendations_deduplicate_same_url():
+    from resume_intelligence import rank_jobs
+    jobs=[{"title":"Engineer","company":"ABC","description":"Python","url":"https://example.com/job/"},
+          {"title":"Engineer","company":"ABC","description":"Python","url":"https://example.com/job"}]
+    result=rank_jobs("Python software engineering experience with production systems.",jobs)
+    assert len(result)==1
+    assert "Matched 1 of 1" in result[0]["explanation"]
+
+def test_recommendations_explain_unscorable_job():
+    from resume_intelligence import rank_jobs
+    jobs=[{"title":"Analyst","description":"Excellent communication and teamwork"}]
+    result=rank_jobs("Python machine learning engineering experience over several projects.",jobs)
+    assert result[0]["score"] is None
+    assert "ranking unavailable" in result[0]["explanation"]
