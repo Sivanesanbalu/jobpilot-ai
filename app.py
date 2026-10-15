@@ -134,3 +134,13 @@ def plans():
  {"id":"pro","name":"Pro","price":None,"available":False},
  {"id":"team","name":"Teams","price":None,"available":False}],
  "notice":"Live checkout is disabled until an authorized payment provider and webhook verification are configured."}
+
+
+@app.get("/api/integrations/supabase")
+def supabase_integration_status():
+ import os
+ endpoint=os.getenv("SUPABASE_URL","")
+ return {"configured":bool(endpoint and os.getenv("SUPABASE_PUBLISHABLE_KEY")),
+         "project":"jobpilot-ai-production" if "sorwxnhjfwnbjuyxsota.supabase.co" in endpoint else None,
+         "auth_live":False,
+         "note":"Supabase credentials configured; authenticated user flows are not yet enabled."}
