@@ -13,3 +13,16 @@ def test_billing_not_active():
  assert result["billing_enabled"] is False
 def test_invalid_company_slug():
  assert client.get("/api/jobs/lever/@@@").status_code==400
+
+
+def test_missing_job_title_rejected():
+ result=client.post("/api/match/score",json={"skills":["Python"]})
+ assert result.status_code==422
+
+def test_invalid_resume_format_rejected():
+ response=client.post("/api/resume/analyze",files={"file":("test.exe",b"test","application/octet-stream")})
+ assert response.status_code==415
+
+def test_public_configuration_has_no_secret_key():
+ keys=set(client.get("/api/public-config").json())
+ assert keys=={"url","publishable_key"}
