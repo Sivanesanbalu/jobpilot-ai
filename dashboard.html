@@ -96,6 +96,7 @@ try{
   const changed=user?.id!==session?.user?.id;
   user=session?.user||null;if(user)isolateAccount(user.id);syncReady=false;clearTimeout(syncTimer);display();
   if(event==="SIGNED_IN"&&changed)queueMicrotask(()=>cloudLoad());
+  if(event==="PASSWORD_RECOVERY")notice("Recovery link verified. Choose Change password to set a new password.");
   if(event==="SIGNED_OUT"){localStorage.removeItem("jp_account_owner");setLocal("tracked",[]);setLocal("profile",{});setLocal("roles",[]);sessionStorage.removeItem("jp_cloud_loaded");location.reload()}
  });
  $("signUpBtn").onclick=async()=>{
