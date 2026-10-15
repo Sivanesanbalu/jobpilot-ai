@@ -37,7 +37,7 @@ class PostgresDiscoveryRepository:
                    values($1,$2,'running') returning id""",
                 search["user_id"], search["id"])
 
-    async def complete_run(self, run_id, jobs):
+    async def complete_run(self, run_id, jobs, lease_token):
         """Notification inserts and successful run completion commit together."""
         async with self.pool.acquire() as conn:
             async with conn.transaction():
@@ -46,6 +46,13 @@ class PostgresDiscoveryRepository:
                        where id=$1 and status='running' for update""", run_id)
                 if run is None:
                     raise ValueError("Run not found or already finalized")
+                locked = await conn.fetchval(
+                    """select 1 from public.discovery_worker_leases
+                       where saved_search_id=$1 and lease_token=$2
+                         and expires_at > clock_timestamp() for update""",
+                    run["saved_search_id"], UUID(str(lease_token)))
+                if not locked:
+                    raise RuntimeError("Worker lease expired or was superseded")
                 count = 0
                 for job in jobs:
                     changed = await conn.fetchval(
