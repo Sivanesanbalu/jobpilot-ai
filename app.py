@@ -232,13 +232,19 @@ class RecommendJob(BaseModel):
  company: str = Field(default="",max_length=180)
  url: str = Field(default="",max_length=2000)
  description: str = Field(default="",max_length=10000)
+ location: str = Field(default="",max_length=180)
+ remote: bool = False
+ min_experience: Optional[int] = Field(default=None,ge=0,le=50)
 
 class RecommendInput(BaseModel):
  resume_text: str = Field(min_length=40,max_length=30000)
  jobs: List[RecommendJob] = Field(min_length=1,max_length=100)
+ preferred_location: str = Field(default="",max_length=180)
+ remote_only: bool = False
+ max_experience: Optional[int] = Field(default=None,ge=0,le=50)
 
 @app.post("/api/resume/recommend")
 def recommend_jobs(data:RecommendInput):
  from resume_intelligence import rank_jobs
- return {"jobs":rank_jobs(data.resume_text,[j.model_dump() for j in data.jobs]),
+ return {"jobs":rank_jobs(data.resume_text,[j.model_dump() for j in data.jobs],data.preferred_location,data.remote_only,data.max_experience),
          "method":"skill_keyword_overlap","note":"Relevance is not hiring probability. Feed jobs may have incomplete descriptions."}
