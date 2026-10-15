@@ -70,9 +70,9 @@ class WorkerRuntime:
                 access = await conn.fetchrow(
                     """select
                        has_table_privilege(current_user,'public.saved_searches','SELECT') as searches,
-                       has_table_privilege(current_user,'public.discovery_runs','INSERT,UPDATE') as runs,
+                       (has_table_privilege(current_user,'public.discovery_runs','INSERT') and has_table_privilege(current_user,'public.discovery_runs','UPDATE')) as runs,
                        has_table_privilege(current_user,'public.job_notifications','INSERT') as notifications,
-                       has_table_privilege(current_user,'public.discovery_worker_leases','INSERT,UPDATE,DELETE,SELECT') as leases,
+                       (has_table_privilege(current_user,'public.discovery_worker_leases','INSERT') and has_table_privilege(current_user,'public.discovery_worker_leases','UPDATE') and has_table_privilege(current_user,'public.discovery_worker_leases','DELETE') and has_table_privilege(current_user,'public.discovery_worker_leases','SELECT')) as leases,
                        has_function_privilege(current_user,'jobpilot_private.acquire_discovery_lease(uuid,uuid,integer)','EXECUTE') as acquire,
                        has_function_privilege(current_user,'jobpilot_private.release_discovery_lease(uuid,uuid)','EXECUTE') as release,
                        has_schema_privilege(current_user,'jobpilot_private','USAGE') as private_schema"""
