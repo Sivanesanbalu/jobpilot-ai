@@ -20,3 +20,7 @@ def test_preflight_does_not_modify_schema():
     assert "create table" not in lowered
     assert "alter table" not in lowered
     assert "drop table" not in lowered
+
+def test_preflight_do_block_has_balanced_dollar_quotes():
+    assert PREFLIGHT.count("$$") == 2
+    assert PREFLIGHT.rstrip().endswith("end;\n$$;")
