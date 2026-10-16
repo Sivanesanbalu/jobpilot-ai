@@ -286,3 +286,22 @@ class ApplicationReviewInput(BaseModel):
 def application_review(data:ApplicationReviewInput):
  from application_review import review_application
  return review_application(data.model_dump())
+
+class ApplicationDraftCandidate(BaseModel):
+ full_name: str = Field(default="",max_length=200)
+ verified_skills: List[str] = Field(default_factory=list,max_length=50)
+
+class ApplicationDraftJob(BaseModel):
+ title: str = Field(min_length=2,max_length=250)
+ company: str = Field(min_length=1,max_length=180)
+ description: str = Field(default="",max_length=10000)
+
+class ApplicationDraftInput(BaseModel):
+ candidate: ApplicationDraftCandidate
+ job: ApplicationDraftJob
+ employer_questions: List[ApplicationQuestionReview] = Field(default_factory=list,max_length=50)
+
+@app.post("/api/application/draft")
+def application_draft(data:ApplicationDraftInput):
+ from application_draft import make_application_draft
+ return make_application_draft(data.candidate.model_dump(),data.job.model_dump(),[q.model_dump() for q in data.employer_questions])
