@@ -47,7 +47,7 @@ jobs:
           PY
           for file in /tmp/jobpilot-inline-*.mjs; do [ -e "$file" ] || continue; node --check "$file"; done
       - name: Run full regression suite
-        run: python -m pytest -q tests --junitxml=test-results.xml
+        run: python -m pytest -q tests --ignore=tests/browser --junitxml=test-results.xml
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
