@@ -12,7 +12,7 @@ begin
   raise exception 'Invalid lease duration';
  end if;
  insert into public.discovery_worker_leases(saved_search_id,lease_token,expires_at,updated_at)
- values(p_search_id,p_token,clock_timestamp()+make_interval(secs=>p_duration_seconds),clock_timestamp())
+ values(p_search_id,p_token,clock_timestamp()+pg_catalog.make_interval(secs=>p_duration_seconds),clock_timestamp())
  on conflict(saved_search_id) do update
  set lease_token=excluded.lease_token, expires_at=excluded.expires_at,updated_at=excluded.updated_at
  where public.discovery_worker_leases.expires_at < clock_timestamp();
