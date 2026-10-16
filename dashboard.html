@@ -72,7 +72,7 @@ async function cloudLoad(){
   setLocal("tracked",mergeApplicationRecords(remote,jobs()));
   window.dispatchEvent(new Event("jobpilot-cloud-loaded"));
   notice("Cloud data loaded. Auto-sync is ready after you enable it below.");
- }catch(e){notice("Cloud load failed: "+e.message)}
+ }catch(e){if(user&&user.id===loadOwner)notice("Cloud load failed: "+e.message)}
  finally{loading=false}
 }
 function display(){
