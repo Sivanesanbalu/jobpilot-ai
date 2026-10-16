@@ -36,3 +36,24 @@ grant select,insert on public.application_approval_events to authenticated;
 create policy "approval_events_read_own" on public.application_approval_events for select to authenticated using ((select auth.uid())=user_id);
 create policy "approval_events_insert_own" on public.application_approval_events for insert to authenticated with check ((select auth.uid())=user_id);
 -- Append only. Browser clients have no UPDATE or DELETE permission.
+
+-- Audit events are written by a database trigger, not by browser-supplied event_type.
+revoke insert on public.application_approval_events from authenticated;
+create or replace function public.record_application_draft_review()
+returns trigger language plpgsql security definer set search_path = ''
+as $$
+begin
+ if tg_op = 'INSERT' then
+  insert into public.application_approval_events(draft_id,user_id,event_type)
+  values(new.id,new.user_id,'draft_created');
+ elsif old.approval_status is distinct from new.approval_status then
+  insert into public.application_approval_events(draft_id,user_id,event_type)
+  values(new.id,new.user_id,
+   case when new.approval_status = 'reviewed' then 'review_approved' else 'review_revoked' end);
+ end if;
+ return new;
+end;
+$$;
+revoke all on function public.record_application_draft_review() from public,anon,authenticated;
+create trigger application_draft_review_audit after insert or update of approval_status
+on public.application_drafts for each row execute function public.record_application_draft_review();
