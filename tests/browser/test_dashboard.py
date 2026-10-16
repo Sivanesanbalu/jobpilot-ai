@@ -18,3 +18,23 @@ def test_dashboard_browser_load_and_review_controls():
         # The cloud module can fail gracefully without project credentials.
         assert not [e for e in errors if "SyntaxError" in e]
         browser.close()
+
+def test_candidate_draft_review_in_real_browser():
+    with sync_playwright() as p:
+        browser=p.chromium.launch(headless=True)
+        page=browser.new_page()
+        page.goto(BASE,wait_until="domcontentloaded")
+        page.get_by_role("button",name="Dashboard",exact=True).click()
+        page.get_by_role("button",name="My applications").click()
+        page.locator("#reviewJobTitle").fill("AI Engineer")
+        page.locator("#reviewCompany").fill("Example")
+        page.locator("#reviewJobDescription").fill("Python and PyTorch")
+        page.locator("#reviewSkills").fill("Python, PyTorch")
+        page.locator("#generateReviewDraft").click()
+        page.wait_for_function('document.querySelector("#generatedApplicationDraft").value.includes("Python")')
+        assert "NOT SUBMITTED" in page.locator("#applicationReviewStatus").inner_text()
+        page.locator("#reviewApplyUrl").fill("https://jobs.lever.co/example/123")
+        page.locator("#checkApplicationReady").click()
+        page.wait_for_function('document.querySelector("#applicationReviewStatus").textContent.includes("Blocked:")')
+        assert "Candidate approval is required" in page.locator("#applicationReviewStatus").inner_text()
+        browser.close()
