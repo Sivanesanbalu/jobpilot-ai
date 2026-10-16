@@ -150,3 +150,14 @@ def test_cloud_draft_approval_is_account_scoped():
     assert 'if(!user||user.id!==owner)return;' in body
     assert '.eq("user_id",owner)' in body
     assert body.count('if(!user||user.id!==owner)return;')==2
+
+
+def test_cloud_draft_actions_guard_against_account_switch():
+    html=TestClient(app).get('/').text
+    start=html.index('async function cloudLoadApplicationDrafts()')
+    end=html.index('function draftStorageKey()',start)
+    body=html[start:end]
+    assert 'restore.onclick=()=>{if(!user||user.id!==requestOwner)return;' in body
+    assert 'remove.onclick=async()=>{if(!user||user.id!==requestOwner)return;' in body
+    assert '.eq("user_id",requestOwner)' in body
+    assert 'track.onclick=()=>{if(!user||user.id!==requestOwner)return;' in body
