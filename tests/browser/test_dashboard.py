@@ -50,12 +50,12 @@ def test_account_switch_discards_previous_browser_local_records():
           localStorage.setItem('jp_tracked',JSON.stringify([{company:'Private A',url:'https://example.com/a'}]));
           localStorage.setItem('jp_profile',JSON.stringify({name:'Private A'}));
           localStorage.setItem('jp_roles',JSON.stringify(['Private A']));
-          const old=localStorage.getItem('jp_account_owner');
-          const nextId='account-b';
-          if(old&&old!==nextId){
-            for(const key of ['profile','tracked','roles'])localStorage.setItem('jp_'+key,JSON.stringify(key==='profile'?{}:[]));
-          }
-          localStorage.setItem('jp_account_owner',nextId);
+          const source=[...document.scripts].map(x=>x.textContent).find(x=>x.includes('function isolateAccount(nextId)'));
+          const functionSource=source.match(/function isolateAccount\\(nextId\\)\\{[^\\n]+\\}/)[0];
+          const actual=Function('setLocal',functionSource+'; return isolateAccount')(
+            (key,value)=>localStorage.setItem('jp_'+key,JSON.stringify(value))
+          );
+          actual('account-b');
           return {
             owner:localStorage.getItem('jp_account_owner'),
             tracked:JSON.parse(localStorage.getItem('jp_tracked')),
