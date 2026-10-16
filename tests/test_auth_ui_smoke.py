@@ -11,7 +11,7 @@ def test_account_ui_present():
 
 def test_cloud_merge_preserves_unsynced_jobs():
     html = TestClient(app).get("/").text
-    assert "remote.concat(jobs().filter" in html
+    assert "setLocal(\"tracked\",mergeApplicationRecords(remote,jobs()))" in html
     assert "if(changed){syncReady=false" in html
 
 
