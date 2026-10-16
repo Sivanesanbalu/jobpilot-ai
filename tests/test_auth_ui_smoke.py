@@ -98,3 +98,10 @@ def test_merge_prefers_latest_confirmed_submission_timestamp():
     html=TestClient(app).get("/").text
     assert 'filter(x=>x.submitted_at).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)))' in html
     assert 'const chosen=confirmed||j' in html
+
+
+def test_cloud_load_disregards_stale_account_fetch():
+    html=TestClient(app).get("/").text
+    assert "const loadOwner=user.id;" in html
+    assert "if(!user||user.id!==loadOwner)return;" in html
+    assert html.index("if(!user||user.id!==loadOwner)return;") < html.index('setLocal("tracked",mergeApplicationRecords(remote,jobs()))')
