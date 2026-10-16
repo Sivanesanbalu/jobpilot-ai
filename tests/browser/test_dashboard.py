@@ -109,3 +109,27 @@ def test_stale_cloud_draft_buttons_are_blocked_after_account_switch():
         }""")
         assert outcome is True
         browser.close()
+
+def test_stale_cloud_draft_restore_click_does_not_change_form():
+    with sync_playwright() as p:
+        browser=p.chromium.launch(headless=True)
+        page=browser.new_page()
+        page.goto(BASE,wait_until="domcontentloaded")
+        result=page.evaluate("""async () => {
+          const source=[...document.scripts].map(s=>s.textContent).find(s=>s.includes('async function cloudLoadApplicationDrafts()'));
+          const body=source.slice(source.indexOf('async function cloudLoadApplicationDrafts()'),source.indexOf('function draftStorageKey()'));
+          const start=body.indexOf('restore.onclick=()=>');
+          const end=body.indexOf(';remove.className',start);
+          const handler=body.slice(start,end);
+          let user={id:'account-b'};
+          const requestOwner='account-a';
+          const item={draft_text:'PRIVATE ACCOUNT A',job_title:'Private',company:'Private Co',apply_url:'https://example.com/private'};
+          const restore={};
+          const $=id=>document.getElementById(id);
+          document.getElementById('generatedApplicationDraft').value='CURRENT USER';
+          Function('restore','getUser','requestOwner','item','$',handler.replaceAll('!user','!getUser()').replaceAll('user.id','getUser().id'))(restore,()=>user,requestOwner,item,$);
+          restore.onclick();
+          return document.getElementById('generatedApplicationDraft').value;
+        }""")
+        assert result=="CURRENT USER"
+        browser.close()
