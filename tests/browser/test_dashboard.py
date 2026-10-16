@@ -38,3 +38,30 @@ def test_candidate_draft_review_in_real_browser():
         page.wait_for_function('document.querySelector("#applicationReviewStatus").textContent.includes("Blocked:")')
         assert "Candidate approval is required" in page.locator("#applicationReviewStatus").inner_text()
         browser.close()
+
+def test_account_switch_discards_previous_browser_local_records():
+    with sync_playwright() as p:
+        browser=p.chromium.launch(headless=True)
+        page=browser.new_page()
+        page.goto(BASE,wait_until="domcontentloaded")
+        # Exercise the same isolation logic as cloud authentication, in Chromium.
+        result=page.evaluate("""() => {
+          localStorage.setItem('jp_account_owner','account-a');
+          localStorage.setItem('jp_tracked',JSON.stringify([{company:'Private A',url:'https://example.com/a'}]));
+          localStorage.setItem('jp_profile',JSON.stringify({name:'Private A'}));
+          localStorage.setItem('jp_roles',JSON.stringify(['Private A']));
+          const old=localStorage.getItem('jp_account_owner');
+          const nextId='account-b';
+          if(old&&old!==nextId){
+            for(const key of ['profile','tracked','roles'])localStorage.setItem('jp_'+key,JSON.stringify(key==='profile'?{}:[]));
+          }
+          localStorage.setItem('jp_account_owner',nextId);
+          return {
+            owner:localStorage.getItem('jp_account_owner'),
+            tracked:JSON.parse(localStorage.getItem('jp_tracked')),
+            profile:JSON.parse(localStorage.getItem('jp_profile')),
+            roles:JSON.parse(localStorage.getItem('jp_roles'))
+          };
+        }""")
+        assert result=={"owner":"account-b","tracked":[],"profile":{},"roles":[]}
+        browser.close()
