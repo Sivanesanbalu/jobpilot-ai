@@ -89,12 +89,15 @@ async function saveProfile(){
 async function cloudStatusHistory(){const root=document.getElementById("cloudStatusHistory");if(!root)return;if(!user||!sb){root.textContent="Sign in to view cloud status history.";return}root.textContent="Loading history…";const {data,error}=await sb.from("application_status_events").select("apply_url,previous_status,current_status,changed_at").eq("user_id",user.id).order("changed_at",{ascending:false}).limit(100);if(error){root.textContent="Cloud status history unavailable: "+error.message;return}root.replaceChildren();if(!data.length){root.textContent="No cloud status changes yet.";return}for(const event of data){const p=document.createElement("p");p.textContent=event.apply_url+" — "+(event.previous_status||"New")+" → "+event.current_status+" · "+new Date(event.changed_at).toLocaleString();root.append(p)}}
 async function saveJobs(){
  if(!user)return;
+ const owner=user.id;
  if(!jobs().length)throw Error("No saved applications to sync. Discover jobs and save at least one first.");
  for(const j of mergeApplicationRecords([],jobs())){
+  if(!user||user.id!==owner)throw Error("Account changed during sync; stopped remaining writes");
   if(!applicationUrlKey(j.url))continue;
-  const payload={user_id:user.id,company:j.company||"Unknown",title:j.title||"Untitled",apply_url:j.url,status:statusToDb[j.status]||"saved",confirmation_ref:j.confirmation_ref||null,submitted_at:j.submitted_at||null};
+  const payload={user_id:owner,company:j.company||"Unknown",title:j.title||"Untitled",apply_url:j.url,status:statusToDb[j.status]||"saved",confirmation_ref:j.confirmation_ref||null,submitted_at:j.submitted_at||null};
   const existing=await sb.from("applications").select("status,confirmation_ref,submitted_at").eq("user_id",user.id).eq("apply_url",j.url).maybeSingle();
   if(existing.error)throw existing.error;
+  if(!user||user.id!==owner)throw Error("Account changed during sync; stopped remaining writes");
   if(existing.data&&existing.data.submitted_at&&(!payload.submitted_at||String(existing.data.submitted_at)>String(payload.submitted_at))){notice("Skipped older local record for "+(j.company||"job")+"; cloud has a newer confirmed submission.");continue}
   const result=await sb.from("applications").upsert(payload,{onConflict:"user_id,apply_url"});
   if(result.error)throw result.error;
