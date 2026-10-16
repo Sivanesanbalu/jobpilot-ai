@@ -130,3 +130,13 @@ def test_cloud_sync_stops_writes_after_account_change():
 def test_stale_cloud_load_errors_not_shown_after_account_switch():
     html=TestClient(app).get('/').text
     assert 'if(user&&user.id===loadOwner)notice("Cloud load failed: "+e.message)' in html
+
+
+def test_cloud_history_read_results_are_account_scoped():
+    html=TestClient(app).get('/').text
+    for fn in ('cloudApprovalHistory','cloudLoadApplicationDrafts','cloudStatusHistory'):
+        start=html.index('async function '+fn+'()')
+        following=html.find('async function ',start+17)
+        body=html[start:following if following!=-1 else None]
+        assert 'const requestOwner=user.id;' in body
+        assert 'if(!user||user.id!==requestOwner)return;' in body
