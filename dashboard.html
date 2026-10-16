@@ -113,6 +113,14 @@ function queueSync(kind){
  syncTimer=setTimeout(()=>sync(kind),1200);
 }
 window.addEventListener("jobpilot-local-change",e=>queueSync(e.detail.key));
+$("cloudSaveDraftBtn").onclick=cloudSaveApplicationDraft;
+$("cloudLoadDraftsBtn").onclick=cloudLoadApplicationDrafts;
+$("cloudStatusHistoryBtn").onclick=cloudStatusHistory;
+$("cloudApprovalHistoryBtn").onclick=cloudApprovalHistory;
+$("saveApplicationDraftBtn").onclick=saveReviewedDraft;
+$("showApplicationDraftsBtn").onclick=showReviewedDrafts;
+$("generateReviewDraft").onclick=()=>prepareApplicationReview("draft");
+$("checkApplicationReady").onclick=()=>prepareApplicationReview("review");
 try{
  const config=await fetch("/api/public-config").then(r=>r.json());
  if(!config.url||!config.publishable_key)throw Error("Cloud accounts not configured.");
@@ -136,14 +144,14 @@ try{
  $("googleSignInBtn").onclick=async()=>{notice("Checking Google sign-in configuration…");const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+"/"}});if(error)notice("Google sign-in unavailable: "+error.message)};
  $("forgotPasswordBtn").onclick=async()=>{const email=$("authEmail").value.trim();if(!email){notice("Enter your email address first.");return}const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+"/"});notice(error?error.message:"If the email belongs to an account, recovery instructions will arrive shortly.")};
  $("changePasswordBtn").onclick=async()=>{const password=prompt("Enter a new password (at least 8 characters)");if(password===null)return;if(password.length<8){notice("Password must have at least eight characters.");return}const {error}=await sb.auth.updateUser({password});notice(error?error.message:"Password changed.")};
- $("cloudSaveDraftBtn").onclick=cloudSaveApplicationDraft;
- $("cloudLoadDraftsBtn").onclick=cloudLoadApplicationDrafts;
- $("cloudStatusHistoryBtn").onclick=cloudStatusHistory;
- $("cloudApprovalHistoryBtn").onclick=cloudApprovalHistory;
- $("saveApplicationDraftBtn").onclick=saveReviewedDraft;
- $("showApplicationDraftsBtn").onclick=showReviewedDrafts;
- $("generateReviewDraft").onclick=()=>prepareApplicationReview("draft");
- $("checkApplicationReady").onclick=()=>prepareApplicationReview("review");
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
  $("loadNotificationsBtn").onclick=loadNotifications;
  $("signOutBtn").onclick=async()=>{const {error}=await sb.auth.signOut();if(error)notice(error.message)};
  $("syncProfileBtn").onclick=async()=>{if(await sync("profile"))syncReady=true};
