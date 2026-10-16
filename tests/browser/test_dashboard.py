@@ -133,3 +133,30 @@ def test_stale_cloud_draft_restore_click_does_not_change_form():
         }""")
         assert result=="CURRENT USER"
         browser.close()
+
+def test_stale_draft_delete_and_track_handlers_do_not_mutate_state():
+    with sync_playwright() as p:
+        browser=p.chromium.launch(headless=True)
+        page=browser.new_page()
+        page.goto(BASE,wait_until="domcontentloaded")
+        result=page.evaluate("""async () => {
+          const source=[...document.scripts].map(s=>s.textContent).find(s=>s.includes('async function cloudLoadApplicationDrafts()'));
+          const body=source.slice(source.indexOf('async function cloudLoadApplicationDrafts()'),source.indexOf('function draftStorageKey()'));
+          const removeSource=body.slice(body.indexOf('remove.onclick=async()=>'),body.indexOf(';const approve=',body.indexOf('remove.onclick=async()=>')));
+          const trackSource=body.slice(body.indexOf('track.onclick=()=>'),body.indexOf(';line.append(',body.indexOf('track.onclick=()=>')));
+          const remove={}, track={}, item={id:'private-a',apply_url:'https://example.com/private',job_title:'Private',company:'Private'};
+          let user={id:'account-b'}, writes=0, confirmations=0;
+          const requestOwner='account-a';
+          const fakeDb={from:()=>{writes++;throw Error('stale delete requested')}};
+          const $=id=>document.getElementById(id);
+          const confirm=()=>{confirmations++;return true};
+          Function('remove','getUser','requestOwner','item','sb','$','confirm','cloudLoadApplicationDrafts',removeSource.replaceAll('!user','!getUser()').replaceAll('user.id','getUser().id'))(remove,()=>user,requestOwner,item,fakeDb,$,confirm,async()=>{});
+          Function('track','getUser','requestOwner','item','$',trackSource.replaceAll('!user','!getUser()').replaceAll('user.id','getUser().id'))(track,()=>user,requestOwner,item,$);
+          const initial=JSON.stringify([{company:'Current account',url:'https://example.com/current'}]);
+          localStorage.setItem('jp_tracked',initial);
+          await remove.onclick();
+          track.onclick();
+          return {writes,confirmations,unchanged:localStorage.getItem('jp_tracked')===initial};
+        }""")
+        assert result=={"writes":0,"confirmations":0,"unchanged":True}
+        browser.close()
