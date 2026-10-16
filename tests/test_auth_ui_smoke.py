@@ -74,3 +74,12 @@ def test_tracker_manual_status_history_and_submission_guard():
     assert 'function trackerSummary()' in html
     assert "heading.textContent='Status history (" in html
     assert "updateTrackedStatus(j,'Applied')" in html
+
+def test_application_tracker_cloud_merge_and_duplicate_guards():
+    html=TestClient(app).get("/").text
+    assert 'function applicationUrlKey(url)' in html
+    assert 'function mergeApplicationRecords(remote,local)' in html
+    assert 'setLocal("tracked",mergeApplicationRecords(remote,jobs()))' in html
+    assert 'for(const j of mergeApplicationRecords([],jobs()))' in html
+    assert 'const confirmed=[previous,j].find(x=>x.submitted_at)' in html
+    assert 'p.pathname.replace(new RegExp("/+$"),"")' in html
