@@ -2,7 +2,7 @@
 create table if not exists public.application_status_events (
  id uuid primary key default gen_random_uuid(),
  user_id uuid not null references auth.users(id) on delete cascade,
- application_id uuid not null references public.applications(id) on delete cascade,
+ apply_url text not null,
  previous_status text,
  current_status text not null,
  changed_at timestamptz not null default now()
@@ -20,8 +20,8 @@ returns trigger language plpgsql security definer set search_path = ''
 as $$
 begin
  if tg_op = 'INSERT' or old.status is distinct from new.status then
-  insert into public.application_status_events(user_id,application_id,previous_status,current_status)
-  values(new.user_id,new.id,case when tg_op = 'INSERT' then null else old.status end,new.status);
+  insert into public.application_status_events(user_id,apply_url,previous_status,current_status)
+  values(new.user_id,new.apply_url,case when tg_op = 'INSERT' then null else old.status end,new.status);
  end if;
  return new;
 end;
