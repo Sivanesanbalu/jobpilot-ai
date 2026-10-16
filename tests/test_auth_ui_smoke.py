@@ -92,3 +92,9 @@ def test_tracker_funnel_analytics_has_safe_zero_denominator():
     assert "counts.Applied+counts.Interview+counts.Offer+counts.Rejected" in html
     assert "analytics.id='trackerConversionMetrics'" in html
     assert "Interview: " in html and "Offers: " in html
+
+
+def test_merge_prefers_latest_confirmed_submission_timestamp():
+    html=TestClient(app).get("/").text
+    assert 'filter(x=>x.submitted_at).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)))' in html
+    assert 'const chosen=confirmed||j' in html
