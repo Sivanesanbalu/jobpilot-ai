@@ -84,3 +84,11 @@ def test_application_tracker_cloud_merge_and_duplicate_guards():
     assert 'const confirmed=[previous,j].find(x=>x.submitted_at)' in html
     assert 'p.pathname.replace(new RegExp("/+$"),"")' in html
     assert '||"/")+p.search' in html
+
+def test_tracker_funnel_analytics_has_safe_zero_denominator():
+    html=TestClient(app).get("/").text
+    assert "function trackerConversionMetrics()" in html
+    assert "den?Math.round(1000*num/den)/10:0" in html
+    assert "counts.Applied+counts.Interview+counts.Offer+counts.Rejected" in html
+    assert "analytics.id='trackerConversionMetrics'" in html
+    assert "Interview: " in html and "Offers: " in html
