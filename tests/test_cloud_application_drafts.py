@@ -37,3 +37,13 @@ def test_review_controls_and_history_are_account_scoped():
     assert 'async function cloudApprovalHistory()' in html
     assert '.from("application_approval_events").select(' in html
     assert 'Review status saved. NOT SUBMITTED.' in html
+
+def test_draft_link_migration_and_safe_tracker_action():
+    migration=Path(__file__).resolve().parents[1].joinpath("supabase/migrations/20261016194500_draft_tracker_link.sql").read_text()
+    assert "add column if not exists apply_url text" in migration
+    assert "application_drafts_apply_url_https" in migration
+    html=TestClient(app).get("/").text
+    assert 'apply_url:applyUrl||null' in html
+    assert 'track.textContent="Save to tracker"' in html
+    assert 'status:"Saved"' in html
+    assert 'status:"Applied"' not in html[html.index('track.textContent="Save to tracker"'):html.index('track.textContent="Save to tracker"')+900]
