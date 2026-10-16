@@ -25,6 +25,22 @@ async def main():
             "20261016200000_application_status_history.sql",
         ):
             await admin.execute((ROOT/"supabase/migrations"/migration).read_text())
+        await admin.execute((ROOT/"tests/postgres/worker_role.sql").read_text())
+        assert await admin.fetchval("select rolbypassrls from pg_roles where rolname='jobpilot_ci_worker'")
+        async with admin.transaction():
+            await admin.execute("set local role jobpilot_ci_worker")
+            rights=await admin.fetchrow("""select
+                has_table_privilege(current_user,'public.saved_searches','SELECT') as searches,
+                has_table_privilege(current_user,'public.discovery_runs','INSERT,UPDATE') as runs,
+                has_table_privilege(current_user,'public.job_notifications','INSERT') as alerts,
+                has_table_privilege(current_user,'public.discovery_worker_leases','SELECT,INSERT,UPDATE,DELETE') as leases,
+                has_function_privilege(current_user,'jobpilot_private.acquire_discovery_lease(uuid,uuid,integer)','EXECUTE') as acquire,
+                has_function_privilege(current_user,'jobpilot_private.release_discovery_lease(uuid,uuid)','EXECUTE') as release,
+                has_schema_privilege(current_user,'jobpilot_private','USAGE') as private_schema,
+                has_table_privilege(current_user,'public.application_drafts','SELECT') as drafts,
+                has_table_privilege(current_user,'public.application_approval_events','INSERT') as audit_insert""")
+            assert all(rights[k] for k in ('searches','runs','alerts','leases','acquire','release','private_schema'))
+            assert not rights['drafts'] and not rights['audit_insert']
         # Verify actual trigger inserts before switching to restricted browser role.
         row=await admin.fetchrow(
             """insert into public.application_drafts(user_id,job_title,company,draft_text)
