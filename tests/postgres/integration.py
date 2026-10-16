@@ -3,6 +3,7 @@ import asyncio
 import os
 from pathlib import Path
 import asyncpg
+from uuid import UUID, uuid4
 
 ROOT=Path(__file__).resolve().parents[2]
 A="00000000-0000-0000-0000-000000000101"
@@ -14,6 +15,8 @@ async def main():
     try:
         await admin.execute((ROOT/"tests/postgres/bootstrap.sql").read_text())
         for migration in (
+            "20261015224400_job_discovery_state.sql",
+            "20261015235000_worker_leases.sql",
             "20261016193000_application_drafts.sql",
             "20261016194500_draft_tracker_link.sql",
             "20261016200000_application_status_history.sql",
@@ -53,7 +56,48 @@ async def main():
             "select has_table_privilege('authenticated','public.application_approval_events','INSERT')")
         assert not await admin.fetchval(
             "select has_table_privilege('authenticated','public.application_status_events','INSERT')")
-        print("Isolated PostgreSQL trigger and user-isolation tests passed")
+        # Real database lease contention and fencing tests.
+        search=await admin.fetchval(
+            "insert into public.saved_searches(user_id,query) values($1,'AI engineer') returning id", A)
+        first_token,second_token=uuid4(),uuid4()
+        pool=await asyncpg.create_pool(dsn,min_size=2,max_size=2)
+        try:
+            async def race(token):
+                async with pool.acquire() as conn:
+                    return await conn.fetchval(
+                        "select jobpilot_private.acquire_discovery_lease($1,$2,300)",
+                        search,token)
+            results=await asyncio.gather(race(first_token),race(second_token))
+            assert sorted(results)==[False,True],results
+            winner=first_token if results[0] else second_token
+            loser=second_token if results[0] else first_token
+            assert not await admin.fetchval(
+                "select jobpilot_private.release_discovery_lease($1,$2)",search,loser)
+            assert await admin.fetchval(
+                "select jobpilot_private.release_discovery_lease($1,$2)",search,winner)
+            assert await admin.fetchval(
+                "select jobpilot_private.acquire_discovery_lease($1,$2,300)",search,loser)
+            # An expired lease can be replaced; stale token cannot release new ownership.
+            await admin.execute(
+                "update public.discovery_worker_leases set expires_at=now()-interval '1 second' where saved_search_id=$1",search)
+            assert await admin.fetchval(
+                "select jobpilot_private.acquire_discovery_lease($1,$2,300)",search,winner)
+            assert not await admin.fetchval(
+                "select jobpilot_private.release_discovery_lease($1,$2)",search,loser)
+            assert await admin.fetchval(
+                "select jobpilot_private.release_discovery_lease($1,$2)",search,winner)
+            # Database uniqueness must suppress duplicate job notifications.
+            await admin.execute(
+                "insert into public.job_notifications(user_id,saved_search_id,job_url,title) values($1,$2,$3,'AI Engineer') on conflict do nothing",
+                A,search,"https://example.com/jobs/one")
+            await admin.execute(
+                "insert into public.job_notifications(user_id,saved_search_id,job_url,title) values($1,$2,$3,'AI Engineer') on conflict do nothing",
+                A,search,"https://example.com/jobs/one")
+            assert await admin.fetchval(
+                "select count(*) from public.job_notifications where saved_search_id=$1",search)==1
+        finally:
+            await pool.close()
+        print("Isolated PostgreSQL triggers, worker leases, and user-isolation tests passed")
     finally:
         await admin.close()
 
