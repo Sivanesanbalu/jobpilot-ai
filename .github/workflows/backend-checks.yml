@@ -24,7 +24,7 @@ jobs:
       - name: Validate installed dependencies
         run: python -m pip check
       - name: Compile backend modules
-        run: python -m compileall -q app.py resume_intelligence.py job_discovery_watch.py discovery_state.py discovery_worker.py discovery_scheduler.py supabase_discovery_worker.py postgres_discovery_repository.py worker_runtime.py application_review.py
+        run: python -m compileall -q app.py resume_intelligence.py job_discovery_watch.py discovery_state.py discovery_worker.py discovery_scheduler.py supabase_discovery_worker.py postgres_discovery_repository.py worker_runtime.py application_review.py application_draft.py
       - name: Run full regression suite
         run: python -m pytest -q tests --junitxml=test-results.xml
       - name: Upload test report
