@@ -15,3 +15,7 @@ def test_lease_functions_private_and_no_browser_execute():
     assert "security invoker" in SQL
     assert "revoke all on schema jobpilot_private from public, anon, authenticated" in SQL
     assert SQL.count("from public,anon,authenticated") == 2
+
+def test_lease_function_qualifies_interval_constructor():
+    assert "pg_catalog.make_interval(secs=>p_duration_seconds)" in SQL
+    assert "clock_timestamp()+make_interval(" not in SQL
