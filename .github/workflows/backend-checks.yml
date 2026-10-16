@@ -46,6 +46,8 @@ jobs:
               if script.strip(): Path(f'/tmp/jobpilot-inline-{i}.mjs').write_text(script)
           PY
           for file in /tmp/jobpilot-inline-*.mjs; do [ -e "$file" ] || continue; node --check "$file"; done
+      - name: Offline production release preflight
+        run: python scripts/release_preflight.py
       - name: Run full regression suite
         run: python -m pytest -q tests --ignore=tests/browser --junitxml=test-results.xml
       - name: Upload test report
