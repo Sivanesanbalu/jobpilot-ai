@@ -105,3 +105,9 @@ def test_cloud_load_disregards_stale_account_fetch():
     assert "const loadOwner=user.id;" in html
     assert "if(!user||user.id!==loadOwner)return;" in html
     assert html.index("if(!user||user.id!==loadOwner)return;") < html.index('setLocal("tracked",mergeApplicationRecords(remote,jobs()))')
+
+
+def test_cloud_sync_rejects_older_confirmed_submission_than_server():
+    html=TestClient(app).get("/").text
+    assert 'existing.data.submitted_at&&(!payload.submitted_at||String(existing.data.submitted_at)>String(payload.submitted_at))' in html
+    assert "cloud has a newer confirmed submission" in html
