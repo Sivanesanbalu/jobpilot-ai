@@ -65,3 +65,12 @@ def test_application_draft_history_is_local_and_not_submitted():
     assert 'submission_status:"NOT_SUBMITTED"' in html
     assert 'Review again before approval' in html
     assert 'localStorage.setItem(draftStorageKey()' in html
+
+def test_tracker_manual_status_history_and_submission_guard():
+    html = TestClient(app).get("/").text
+    assert 'function updateTrackedStatus(job,next)' in html
+    assert 'next==="Applied"&&!job.submitted_at' in html
+    assert 'source:"candidate_manual_update"' in html
+    assert 'function trackerSummary()' in html
+    assert "heading.textContent='Status history (" in html
+    assert "updateTrackedStatus(j,'Applied')" in html
