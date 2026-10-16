@@ -23,3 +23,17 @@ def test_cloud_dashboard_has_scoped_crud_and_no_auto_submit():
     assert 'sb.from("application_drafts").delete()' in html
     assert '.eq("user_id",user.id)' in html
     assert 'submission_status:"NOT_SUBMITTED"' in html
+
+def test_approval_audit_is_database_generated():
+    assert "revoke insert on public.application_approval_events from authenticated" in SQL
+    assert "create trigger application_draft_review_audit" in SQL
+    assert "security definer set search_path = ''" in SQL
+    assert "review_approved" in SQL and "review_revoked" in SQL
+
+def test_review_controls_and_history_are_account_scoped():
+    html=TestClient(app).get("/").text
+    assert 'id="cloudApprovalHistoryBtn"' in html
+    assert 'async function setCloudDraftApproval(' in html
+    assert 'async function cloudApprovalHistory()' in html
+    assert '.from("application_approval_events").select(' in html
+    assert 'Review status saved. NOT SUBMITTED.' in html
