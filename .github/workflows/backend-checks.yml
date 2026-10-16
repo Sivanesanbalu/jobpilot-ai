@@ -48,6 +48,8 @@ jobs:
           for file in /tmp/jobpilot-inline-*.mjs; do [ -e "$file" ] || continue; node --check "$file"; done
       - name: Offline production release preflight
         run: python scripts/release_preflight.py
+      - name: Verify migration manifest integrity
+        run: python scripts/check_migration_manifest.py
       - name: Run full regression suite
         run: python -m pytest -q tests --ignore=tests/browser --junitxml=test-results.xml
       - name: Upload test report
