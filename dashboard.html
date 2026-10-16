@@ -102,12 +102,18 @@ async function saveJobs(){
 }
 async function sync(kind){
  if(!user||loading)return false;
+ const owner=user.id;
  try{
   if(kind==="profile")await saveProfile();
   if(kind==="tracked")await saveJobs();
+  if(!user||user.id!==owner)return false;
   notice("Cloud "+(kind==="profile"?"profile":"applications")+" saved successfully.");
   return true;
- }catch(e){notice("Sync failed: "+e.message);return false}
+ }catch(e){
+  if(!user||user.id!==owner)return false;
+  notice("Sync failed: "+e.message+" Retry using the Cloud sync button.");
+  return false
+ }
 }
 function queueSync(kind){
  if(!syncReady||!user||loading||!["profile","tracked"].includes(kind))return;
