@@ -44,3 +44,14 @@ def test_notification_inbox_requires_signed_in_user():
     assert '.eq("user_id",user.id)' in html
     assert 'id="loadNotificationsBtn"' in html
     assert 'Mark read' in html
+
+def test_application_review_dashboard_routes_and_approval_control():
+    html = TestClient(app).get("/").text
+    assert 'id="applicationReviewCard"' in html
+    assert 'id="reviewApproved"' in html
+    assert 'id="generatedApplicationDraft"' in html
+    assert '"/api/application/draft"' in html
+    assert '"/api/application/review"' in html
+    assert 'candidate_approved:approved' in html
+    assert 'NOT SUBMITTED' in html
+    assert 'line.indexOf("=")' in html
