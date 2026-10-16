@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import asyncpg
 from uuid import UUID, uuid4
+from postgres_discovery_repository import PostgresDiscoveryRepository
 
 ROOT=Path(__file__).resolve().parents[2]
 A="00000000-0000-0000-0000-000000000101"
@@ -95,6 +96,45 @@ async def main():
                 A,search,"https://example.com/jobs/one")
             assert await admin.fetchval(
                 "select count(*) from public.job_notifications where saved_search_id=$1",search)==1
+            repository=PostgresDiscoveryRepository(pool)
+            token=uuid4()
+            assert await repository.acquire_lease(search,token,300)
+            record=await repository.get_search(search)
+            run=await repository.start_run(record)
+            jobs=[{"job_url":"https://example.com/jobs/two","title":"Engineer","company":"Example"}]
+            assert await repository.complete_run(run,jobs,token)==1
+            assert await admin.fetchval(
+                "select status from public.discovery_runs where id=$1",run)=="succeeded"
+            assert await repository.release_lease(search,token)
+            assert await repository.acquire_lease(search,token,300)
+            duplicate=await repository.start_run(record)
+            assert await repository.complete_run(duplicate,jobs,token)==0
+            assert await repository.release_lease(search,token)
+            # Failed inserts must roll back both notifications and successful run status.
+            assert await repository.acquire_lease(search,token,300)
+            rollback_run=await repository.start_run(record)
+            try:
+                await repository.complete_run(rollback_run,[
+                    {"job_url":"https://example.com/jobs/rollback","title":"Engineer"},
+                    {"job_url":"http://unsafe.example/jobs/bad","title":"Bad"}],token)
+                raise AssertionError("Invalid notification URL unexpectedly committed")
+            except asyncpg.CheckViolationError:
+                pass
+            assert await admin.fetchval(
+                "select status from public.discovery_runs where id=$1",rollback_run)=="running"
+            assert await admin.fetchval(
+                "select count(*) from public.job_notifications where job_url=$1",
+                "https://example.com/jobs/rollback")==0
+            await repository.release_lease(search,token)
+            # Completing with no valid lease cannot change the run or write alerts.
+            stale=await repository.start_run(record)
+            try:
+                await repository.complete_run(stale,[{"job_url":"https://example.com/jobs/stale"}],token)
+                raise AssertionError("Stale lease unexpectedly finalized the run")
+            except RuntimeError as exc:
+                assert "lease" in str(exc).lower()
+            assert await admin.fetchval(
+                "select status from public.discovery_runs where id=$1",stale)=="running"
         finally:
             await pool.close()
         print("Isolated PostgreSQL triggers, worker leases, and user-isolation tests passed")
