@@ -55,3 +55,13 @@ def test_application_review_dashboard_routes_and_approval_control():
     assert 'candidate_approved:approved' in html
     assert 'NOT SUBMITTED' in html
     assert 'line.indexOf("=")' in html
+
+def test_application_draft_history_is_local_and_not_submitted():
+    html=TestClient(app).get("/").text
+    assert 'id="saveApplicationDraftBtn"' in html
+    assert 'id="showApplicationDraftsBtn"' in html
+    assert 'function draftStorageKey()' in html
+    assert 'function readDrafts()' in html
+    assert 'submission_status:"NOT_SUBMITTED"' in html
+    assert 'Review again before approval' in html
+    assert 'localStorage.setItem(draftStorageKey()' in html
