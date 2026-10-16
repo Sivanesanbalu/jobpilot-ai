@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 import asyncpg
 from uuid import UUID, uuid4
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from postgres_discovery_repository import PostgresDiscoveryRepository
 
 ROOT=Path(__file__).resolve().parents[2]
