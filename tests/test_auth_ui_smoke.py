@@ -140,3 +140,13 @@ def test_cloud_history_read_results_are_account_scoped():
         body=html[start:following if following!=-1 else None]
         assert 'const requestOwner=user.id;' in body
         assert 'if(!user||user.id!==requestOwner)return;' in body
+
+
+def test_cloud_draft_approval_is_account_scoped():
+    html=TestClient(app).get('/').text
+    start=html.index('async function setCloudDraftApproval(id,approved)')
+    body=html[start:html.index('async function cloudApprovalHistory()',start)]
+    assert 'const owner=user.id;' in body
+    assert 'if(!user||user.id!==owner)return;' in body
+    assert '.eq("user_id",owner)' in body
+    assert body.count('if(!user||user.id!==owner)return;')==2
