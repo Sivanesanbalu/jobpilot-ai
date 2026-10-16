@@ -83,3 +83,4 @@ def test_application_tracker_cloud_merge_and_duplicate_guards():
     assert 'for(const j of mergeApplicationRecords([],jobs()))' in html
     assert 'const confirmed=[previous,j].find(x=>x.submitted_at)' in html
     assert 'p.pathname.replace(new RegExp("/+$"),"")' in html
+    assert '||"/")+p.search' in html
