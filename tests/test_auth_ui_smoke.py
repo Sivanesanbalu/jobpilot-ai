@@ -125,3 +125,8 @@ def test_cloud_sync_stops_writes_after_account_change():
     assert 'const owner=user.id;' in html
     assert html.count('Account changed during sync; stopped remaining writes') == 2
     assert 'const payload={user_id:owner,company:j.company' in html
+
+
+def test_stale_cloud_load_errors_not_shown_after_account_switch():
+    html=TestClient(app).get('/').text
+    assert 'if(user&&user.id===loadOwner)notice("Cloud load failed: "+e.message)' in html
