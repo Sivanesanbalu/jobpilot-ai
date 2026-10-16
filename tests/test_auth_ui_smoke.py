@@ -111,3 +111,10 @@ def test_cloud_sync_rejects_older_confirmed_submission_than_server():
     html=TestClient(app).get("/").text
     assert 'existing.data.submitted_at&&(!payload.submitted_at||String(existing.data.submitted_at)>String(payload.submitted_at))' in html
     assert "cloud has a newer confirmed submission" in html
+
+
+def test_cloud_sync_feedback_is_account_safe_and_retryable():
+    html=TestClient(app).get("/").text
+    assert 'const owner=user.id;' in html
+    assert 'if(!user||user.id!==owner)return false;' in html
+    assert 'Retry using the Cloud sync button.' in html
