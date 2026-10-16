@@ -91,3 +91,21 @@ def test_stale_cloud_history_response_cannot_render_after_account_switch():
         }""")
         assert result is False
         browser.close()
+
+def test_stale_cloud_draft_buttons_are_blocked_after_account_switch():
+    with sync_playwright() as p:
+        browser=p.chromium.launch(headless=True)
+        page=browser.new_page()
+        page.goto(BASE,wait_until="domcontentloaded")
+        outcome=page.evaluate("""() => {
+          const source=[...document.scripts].map(s=>s.textContent).find(s=>s.includes('async function cloudLoadApplicationDrafts()'));
+          const start=source.indexOf('async function cloudLoadApplicationDrafts()');
+          const end=source.indexOf('function draftStorageKey()',start);
+          const body=source.slice(start,end);
+          const guarded=['restore.onclick=()=>{if(!user||user.id!==requestOwner)return;',
+            'remove.onclick=async()=>{if(!user||user.id!==requestOwner)return;',
+            'track.onclick=()=>{if(!user||user.id!==requestOwner)return;'];
+          return guarded.every(x=>body.includes(x));
+        }""")
+        assert outcome is True
+        browser.close()
