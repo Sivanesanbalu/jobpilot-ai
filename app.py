@@ -264,3 +264,25 @@ def job_changes(data:JobWatchInput):
  fresh=new_job_matches(data.known_urls,[j.model_dump() for j in data.jobs])
  return {"new_jobs":fresh,"count":len(fresh),"notifications_sent":False,
          "note":"Change detection only. Scheduled execution and notifications are not enabled."}
+
+class ApplicationCandidateReview(BaseModel):
+ full_name: str = Field(default="",max_length=200)
+ email: str = Field(default="",max_length=254)
+ phone: str = Field(default="",max_length=50)
+ resume_attached: bool = False
+
+class ApplicationQuestionReview(BaseModel):
+ key: str = Field(min_length=1,max_length=100)
+ required: bool = False
+ answer: str = Field(default="",max_length=3000)
+
+class ApplicationReviewInput(BaseModel):
+ apply_url: str = Field(max_length=2000)
+ candidate: ApplicationCandidateReview
+ employer_questions: List[ApplicationQuestionReview] = Field(default_factory=list,max_length=50)
+ candidate_approved: bool = False
+
+@app.post("/api/application/review")
+def application_review(data:ApplicationReviewInput):
+ from application_review import review_application
+ return review_application(data.model_dump())
