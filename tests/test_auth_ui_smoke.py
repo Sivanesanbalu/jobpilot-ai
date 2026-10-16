@@ -118,3 +118,10 @@ def test_cloud_sync_feedback_is_account_safe_and_retryable():
     assert 'const owner=user.id;' in html
     assert 'if(!user||user.id!==owner)return false;' in html
     assert 'Retry using the Cloud sync button.' in html
+
+
+def test_cloud_sync_stops_writes_after_account_change():
+    html=TestClient(app).get("/").text
+    assert 'const owner=user.id;' in html
+    assert html.count('Account changed during sync; stopped remaining writes') == 2
+    assert 'const payload={user_id:owner,company:j.company' in html
