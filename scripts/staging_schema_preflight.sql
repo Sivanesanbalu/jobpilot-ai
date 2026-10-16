@@ -40,4 +40,4 @@ begin
   end if;
   raise notice 'Staging schema preflight passed (RLS behavior still needs user-isolation integration tests)';
 end;
-$;
+$$;
