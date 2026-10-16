@@ -65,3 +65,29 @@ def test_account_switch_discards_previous_browser_local_records():
         }""")
         assert result=={"owner":"account-b","tracked":[],"profile":{},"roles":[]}
         browser.close()
+
+def test_stale_cloud_history_response_cannot_render_after_account_switch():
+    with sync_playwright() as p:
+        browser=p.chromium.launch(headless=True)
+        page=browser.new_page()
+        page.goto(BASE,wait_until="domcontentloaded")
+        result=page.evaluate("""async () => {
+          const source=[...document.scripts].map(s=>s.textContent).find(s=>s.includes('async function cloudStatusHistory()'));
+          const body=source.match(/async function cloudStatusHistory\\(\\)\\{[^\\n]+\\}/)[0];
+          let resolveFetch;
+          const delayed=new Promise(resolve=>resolveFetch=resolve);
+          let current={id:'account-a'};
+          const root=document.querySelector('#cloudStatusHistory');
+          const fn=Function('document','getUser','sb',body.replaceAll('user.id','getUser().id').replaceAll('!user','!getUser()')+'; return cloudStatusHistory')(
+            document,()=>current,{
+              from:()=>({select:()=>({eq:()=>({order:()=>({limit:()=>delayed})})})})
+            }
+          );
+          const pending=fn();
+          current={id:'account-b'};
+          resolveFetch({data:[{apply_url:'https://private.example/a',current_status:'submitted',changed_at:new Date().toISOString()}],error:null});
+          await pending;
+          return root.textContent.includes('private.example');
+        }""")
+        assert result is False
+        browser.close()
