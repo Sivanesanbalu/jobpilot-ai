@@ -25,6 +25,25 @@ async def main():
             "20261016200000_application_status_history.sql",
         ):
             await admin.execute((ROOT/"supabase/migrations"/migration).read_text())
+        # Run the staged schema preflight against real PostgreSQL catalogs.
+        await admin.execute((ROOT/"scripts/staging_schema_preflight.sql").read_text())
+        # Detect incompatible column types in the database fixture before release.
+        expected = {
+            ("application_drafts","id"): "uuid",
+            ("application_drafts","user_id"): "uuid",
+            ("application_drafts","approval_status"): "text",
+            ("application_drafts","apply_url"): "text",
+            ("applications","user_id"): "uuid",
+            ("applications","apply_url"): "text",
+            ("applications","status"): "text",
+            ("discovery_worker_leases","lease_token"): "uuid",
+        }
+        for (table,column),kind in expected.items():
+            actual=await admin.fetchval(
+                """select data_type from information_schema.columns
+                   where table_schema='public' and table_name=$1 and column_name=$2""",
+                table,column)
+            assert actual==kind,(table,column,actual,kind)
         await admin.execute((ROOT/"tests/postgres/worker_role.sql").read_text())
         assert await admin.fetchval("select rolbypassrls from pg_roles where rolname='jobpilot_ci_worker'")
         async with admin.transaction():
