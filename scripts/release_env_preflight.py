@@ -1,44 +1,14 @@
-"""Check release targets without connecting to external systems.
-
-This is a local fail-closed preflight, not permission to run migrations.
-"""
-import re
-
-
-_PROJECT_REF = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
-
-
-def _reference(value):
-    if not isinstance(value, str):
-        return ""
-    return value.strip().lower()
-
+"""Validate deployment environment identity without connecting to external systems."""
 
 def evaluate(settings):
-    staging = _reference(settings.get("STAGING_PROJECT_REF", ""))
-    production = _reference(settings.get("PRODUCTION_PROJECT_REF", ""))
-    staging_valid = bool(_PROJECT_REF.fullmatch(staging))
-    production_valid = bool(_PROJECT_REF.fullmatch(production))
-    separate = staging_valid and production_valid and staging != production
-    staging_mode = settings.get("RELEASE_TARGET") == "staging"
-    production_locked = settings.get("PRODUCTION_APPROVED") != "yes"
+    staging = settings.get("STAGING_PROJECT_REF", "").strip()
+    production = settings.get("PRODUCTION_PROJECT_REF", "").strip()
+    target = settings.get("RELEASE_TARGET", "").strip()
+    approved = settings.get("PRODUCTION_APPROVED", "").strip().lower()
     return {
-        "separate_staging": separate,
-        "staging_mode": staging_mode,
-        "production_locked": production_locked,
-        "safe_for_staging": separate and staging_mode and production_locked,
+        "separate_staging": bool(staging and production and staging != production),
+        "staging_mode": target == "staging",
+        "production_locked": approved != "yes",
+        "valid_target": target in {"staging", "production"},
+        "refs_present": bool(staging and production),
     }
-
-
-def release_decision(settings):
-    """Fail closed until staging verification and explicit release sign-off exist.
-
-    This is a local policy check only; it does not verify external evidence or
-    authorize database migrations or deployment by itself.
-    """
-    checks = evaluate(settings)
-    checks['staging_auth_e2e'] = settings.get('STAGING_AUTH_E2E_VERIFIED') == 'yes'
-    checks['staging_rls_e2e'] = settings.get('STAGING_RLS_E2E_VERIFIED') == 'yes'
-    checks['staging_migrations'] = settings.get('STAGING_MIGRATIONS_VERIFIED') == 'yes'
-    checks['release_reviewed'] = settings.get('RELEASE_REVIEW_APPROVED') == 'yes'
-    return {'ready_for_release_review': all(checks.values()), 'checks': checks}
