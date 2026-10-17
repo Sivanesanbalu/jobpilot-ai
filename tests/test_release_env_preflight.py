@@ -112,3 +112,22 @@ def test_release_environment_rejects_whitespace_and_missing_ref():
     result = evaluate({'STAGING_PROJECT_REF': ' ', 'PRODUCTION_PROJECT_REF': 'productionproject1234', 'RELEASE_TARGET': 'staging'})
     assert result['valid_project_refs'] is False
     assert result['separate_staging'] is False
+
+def test_preflight_cli_blocks_unsafe_release_and_redacts_project_refs():
+    import json
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ, STAGING_PROJECT_REF="secret-staging-ref", PRODUCTION_PROJECT_REF="secret-production-ref", RELEASE_TARGET="staging", PRODUCTION_APPROVED="no")
+    cmd = [sys.executable, "-m", "scripts.release_env_preflight"]
+    passed = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    assert passed.returncode == 0
+    assert json.loads(passed.stdout)["staging_preflight_passed"] is True
+    assert "secret-staging-ref" not in passed.stdout
+    assert "secret-production-ref" not in passed.stdout
+
+    env["RELEASE_TARGET"] = "production"
+    blocked = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    assert blocked.returncode != 0
+    assert json.loads(blocked.stdout)["staging_preflight_passed"] is False
