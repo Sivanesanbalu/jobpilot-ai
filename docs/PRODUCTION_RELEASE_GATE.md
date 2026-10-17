@@ -39,3 +39,19 @@
 Before attempting staging migrations, configure `STAGING_PROJECT_REF`, `PRODUCTION_PROJECT_REF` and `RELEASE_TARGET=staging` in your **private** environment. Keep `PRODUCTION_APPROVED` unset or `no`. Run `python -m scripts.release_env_preflight` from the repository root.
 
 The command exits **0** only for a separate staging project, staging target and locked production; otherwise it exits **1**. It prints only boolean results, not project references or secrets. **Passing this check is not authorization to apply migrations:** all live staging validation and approvals above are still required.
+
+
+## Release assessment — 2026-10-17 (read-only)
+
+**Decision: BLOCKED — not production-ready.** The latest release preflight now validates exact 20-character lowercase Supabase project references, separate staging and production targets, a locked production approval flag, and four explicitly attested staging evidence gates. These checks are offline safeguards, **not** proof that live staging validation occurred.
+
+A read-only listing of accessible Supabase projects found `jobpilot-ai-production` active and `nunes-instrumentation-staging` active. **No dedicated JobPilot staging project was visible.** The Nunes database belongs to another application and must **never** be reused or migrated for JobPilot. Other inactive projects are not assumed to be JobPilot staging.
+
+Release blockers requiring separate authorized work:
+- Provision/identify a **separate** JobPilot staging database and configure private staging secrets.
+- Apply staged migrations to that isolated staging environment only after schema compatibility review.
+- Execute actual two-user Supabase Auth, RLS, PostgREST, draft CRUD and application tracking E2E tests; collect evidence.
+- Validate worker identity, worker runtime/scheduler, rollback/backup procedure, monitoring, and production schema drift.
+- Receive explicit authorization before each production migration and before merging/deploying `main`.
+
+`python -m scripts.release_env_preflight` returns only boolean evidence and exits nonzero unless **offline staging-target safety** passes. Its `ready_for_release_review` output additionally requires all four `STAGING_*_VERIFIED` and `RELEASE_REVIEW_APPROVED` values to be `yes`; never mark these yes before actual verification.
