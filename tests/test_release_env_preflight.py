@@ -72,3 +72,16 @@ def test_cli_is_private_and_returns_nonzero_for_unsafe_environment():
     result = subprocess.run(cmd, env=env, capture_output=True, text=True)
     assert result.returncode != 0
     assert json.loads(result.stdout)["staging_preflight_passed"] is False
+
+
+def test_release_environment_rejects_whitespace_and_invalid_project_refs():
+    bad = evaluate({'STAGING_PROJECT_REF': 'stage project!', 'PRODUCTION_PROJECT_REF': 'production-project', 'RELEASE_TARGET': 'staging'})
+    assert bad['separate_staging'] is False
+    padded = evaluate({'STAGING_PROJECT_REF': ' production-project ', 'PRODUCTION_PROJECT_REF': 'production-project', 'RELEASE_TARGET': 'staging'})
+    assert padded['separate_staging'] is False
+
+
+def test_release_environment_does_not_unlock_production_with_mixed_case_approval():
+    result = evaluate({'STAGING_PROJECT_REF': 'stage-project', 'PRODUCTION_PROJECT_REF': 'production-project', 'RELEASE_TARGET': ' STAGING ', 'PRODUCTION_APPROVED': ' YES '})
+    assert result['production_locked'] is False
+    assert result['staging_mode'] is True
