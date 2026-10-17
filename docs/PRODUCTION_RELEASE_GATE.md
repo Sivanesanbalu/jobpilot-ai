@@ -34,3 +34,8 @@
 - Manual candidate submission confirmation remains mandatory; never auto-submit applications.
 
 **Release rule:** failing or unverified gate = BLOCK; no implicit authorization from a passing CI run.
+
+## Offline staging-target check (Phase 5.41)
+Before attempting staging migrations, configure `STAGING_PROJECT_REF`, `PRODUCTION_PROJECT_REF` and `RELEASE_TARGET=staging` in your **private** environment. Keep `PRODUCTION_APPROVED` unset or `no`. Run `python -m scripts.release_env_preflight` from the repository root.
+
+The command exits **0** only for a separate staging project, staging target and locked production; otherwise it exits **1**. It prints only boolean results, not project references or secrets. **Passing this check is not authorization to apply migrations:** all live staging validation and approvals above are still required.
