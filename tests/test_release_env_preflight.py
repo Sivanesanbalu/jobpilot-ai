@@ -75,13 +75,12 @@ def test_cli_is_private_and_returns_nonzero_for_unsafe_environment():
 
 
 def test_release_environment_rejects_whitespace_and_invalid_project_refs():
-    bad = evaluate({'STAGING_PROJECT_REF': 'stage project!', 'PRODUCTION_PROJECT_REF': 'production-project', 'RELEASE_TARGET': 'staging'})
-    assert bad['separate_staging'] is False
-    padded = evaluate({'STAGING_PROJECT_REF': ' production-project ', 'PRODUCTION_PROJECT_REF': 'production-project', 'RELEASE_TARGET': 'staging'})
-    assert padded['separate_staging'] is False
+    for invalid in ("stage project!", "abcdefghijklmnopqrst ", " ABCDEFGHIJKLMNOPQRST"):
+        assert not evaluate({**settings(), "STAGING_PROJECT_REF": invalid})["safe_for_staging"]
 
 
-def test_release_environment_does_not_unlock_production_with_mixed_case_approval():
-    result = evaluate({'STAGING_PROJECT_REF': 'stage-project', 'PRODUCTION_PROJECT_REF': 'production-project', 'RELEASE_TARGET': ' STAGING ', 'PRODUCTION_APPROVED': ' YES '})
-    assert result['production_locked'] is False
-    assert result['staging_mode'] is True
+def test_release_environment_does_not_normalize_sensitive_release_flags():
+    state = evaluate({**settings(), "RELEASE_TARGET": " STAGING ", "PRODUCTION_APPROVED": " YES "})
+    assert not state["staging_mode"]
+    assert not state["safe_for_staging"]
+    assert release_decision({**settings(), "STAGING_AUTH_E2E_VERIFIED": " YES "})["ready_for_release_review"] is False
