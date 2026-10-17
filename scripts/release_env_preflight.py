@@ -28,3 +28,17 @@ def evaluate(settings):
         "production_locked": production_locked,
         "safe_for_staging": separate and staging_mode and production_locked,
     }
+
+
+def release_decision(settings):
+    """Fail closed until staging verification and explicit release sign-off exist.
+
+    This is a local policy check only; it does not verify external evidence or
+    authorize database migrations or deployment by itself.
+    """
+    checks = evaluate(settings)
+    checks['staging_auth_e2e'] = settings.get('STAGING_AUTH_E2E_VERIFIED') == 'yes'
+    checks['staging_rls_e2e'] = settings.get('STAGING_RLS_E2E_VERIFIED') == 'yes'
+    checks['staging_migrations'] = settings.get('STAGING_MIGRATIONS_VERIFIED') == 'yes'
+    checks['release_reviewed'] = settings.get('RELEASE_REVIEW_APPROVED') == 'yes'
+    return {'ready_for_release_review': all(checks.values()), 'checks': checks}
