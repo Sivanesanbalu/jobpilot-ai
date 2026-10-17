@@ -101,3 +101,14 @@ def test_preflight_rejects_placeholder_and_non_string_refs():
     for invalid in (None, False, 12345678):
         result = evaluate({'STAGING_PROJECT_REF': invalid, 'PRODUCTION_PROJECT_REF': 'production123456', 'RELEASE_TARGET': 'staging'})
         assert result['separate_staging'] is False
+
+
+def test_release_environment_rejects_malformed_project_refs():
+    result = evaluate({'STAGING_PROJECT_REF': 'https://example.supabase.co', 'PRODUCTION_PROJECT_REF': 'productionproject1234', 'RELEASE_TARGET': 'staging'})
+    assert result['valid_project_refs'] is False
+
+
+def test_release_environment_rejects_whitespace_and_missing_ref():
+    result = evaluate({'STAGING_PROJECT_REF': ' ', 'PRODUCTION_PROJECT_REF': 'productionproject1234', 'RELEASE_TARGET': 'staging'})
+    assert result['valid_project_refs'] is False
+    assert result['separate_staging'] is False
