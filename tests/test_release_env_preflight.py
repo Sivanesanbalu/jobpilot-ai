@@ -45,3 +45,27 @@ def test_production_approval_flag_does_not_unlock_staging_preflight():
         'PRODUCTION_APPROVED': 'yes',
     })
     assert result['safe_for_staging'] is False
+
+
+def test_release_decision_fails_closed_without_staging_evidence():
+    from scripts.release_env_preflight import release_decision
+    result = release_decision({'STAGING_PROJECT_REF': 'staging', 'PRODUCTION_PROJECT_REF': 'production', 'RELEASE_TARGET': 'staging'})
+    assert result['ready_for_release_review'] is False
+    assert result['checks']['staging_auth_e2e'] is False
+    assert result['checks']['release_reviewed'] is False
+
+
+def test_release_decision_requires_every_staging_gate():
+    from scripts.release_env_preflight import release_decision
+    env = {
+        'STAGING_PROJECT_REF': 'staging',
+        'PRODUCTION_PROJECT_REF': 'production',
+        'RELEASE_TARGET': 'staging',
+        'STAGING_AUTH_E2E_VERIFIED': 'yes',
+        'STAGING_RLS_E2E_VERIFIED': 'yes',
+        'STAGING_MIGRATIONS_VERIFIED': 'yes',
+        'RELEASE_REVIEW_APPROVED': 'yes',
+    }
+    assert release_decision(env)['ready_for_release_review'] is True
+    env['STAGING_RLS_E2E_VERIFIED'] = 'no'
+    assert release_decision(env)['ready_for_release_review'] is False
