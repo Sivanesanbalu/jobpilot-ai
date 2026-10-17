@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse
 from pathlib import Path
 from io import BytesIO
 import asyncio, re, httpx
+from html import unescape
 from pypdf import PdfReader
 
 app=FastAPI(title="JobPilot AI",version="0.4.1")
@@ -58,13 +59,17 @@ async def analyze_resume(file:UploadFile=File(...)):
  found=sorted({x for r in scores for x in r["skills"]})
  return {"suggested_roles":[s for s in scores if s["score"]>0][:5] or scores[:3],"skills":found[:30],"extracted_characters":len(content),"note":"Resume parsed in memory and not stored on the server. Review recommendations before using."}
 
+def plain_description(value):
+ if not isinstance(value,str): return ""
+ return re.sub(r"\s+"," ",unescape(re.sub(r"<[^>]+>"," ",value))).strip()[:10000]
+
 def normalized(provider,j,slug=""):
- if provider=="greenhouse": return {"id":str(j.get("id")),"title":j.get("title",""),"company":slug,"location":(j.get("location") or {}).get("name",""),"url":j.get("absolute_url",""),"source":provider}
- if provider=="lever": return {"id":str(j.get("id")),"title":j.get("text",""),"company":slug,"location":(j.get("categories") or {}).get("location",""),"url":j.get("hostedUrl",""),"source":provider}
- if provider=="ashby": return {"id":str(j.get("id")),"title":j.get("title",""),"company":slug,"location":j.get("location",""),"url":j.get("applyUrl") or j.get("jobUrl",""),"source":provider}
- if provider=="smartrecruiters": return {"id":str(j.get("id")),"title":j.get("name",""),"company":slug,"location":(j.get("location") or {}).get("city",""),"url":j.get("ref",""),"source":provider}
- if provider=="remotive": return {"id":str(j.get("id")),"title":j.get("title",""),"company":j.get("company_name",""),"location":j.get("candidate_required_location",""),"url":j.get("url",""),"source":provider}
- if provider=="arbeitnow": return {"id":str(j.get("slug")),"title":j.get("title",""),"company":j.get("company_name",""),"location":j.get("location",""),"url":j.get("url",""),"source":provider}
+ if provider=="greenhouse": return {"id":str(j.get("id")),"title":j.get("title",""),"company":slug,"location":(j.get("location") or {}).get("name",""),"url":j.get("absolute_url",""),"source":provider,"description":plain_description(j.get("content",""))}
+ if provider=="lever": return {"id":str(j.get("id")),"title":j.get("text",""),"company":slug,"location":(j.get("categories") or {}).get("location",""),"url":j.get("hostedUrl",""),"source":provider,"description":plain_description(j.get("descriptionPlain") or j.get("description",""))}
+ if provider=="ashby": return {"id":str(j.get("id")),"title":j.get("title",""),"company":slug,"location":j.get("location",""),"url":j.get("applyUrl") or j.get("jobUrl",""),"source":provider,"description":plain_description(j.get("descriptionPlain") or j.get("descriptionHtml","")),"remote":bool(j.get("isRemote",False))}
+ if provider=="smartrecruiters": return {"id":str(j.get("id")),"title":j.get("name",""),"company":slug,"location":(j.get("location") or {}).get("city",""),"url":j.get("ref",""),"source":provider,"description":plain_description(j.get("jobAd",""))}
+ if provider=="remotive": return {"id":str(j.get("id")),"title":j.get("title",""),"company":j.get("company_name",""),"location":j.get("candidate_required_location",""),"url":j.get("url",""),"source":provider,"description":plain_description(j.get("description","")),"remote":True}
+ if provider=="arbeitnow": return {"id":str(j.get("slug")),"title":j.get("title",""),"company":j.get("company_name",""),"location":j.get("location",""),"url":j.get("url",""),"source":provider,"description":plain_description(j.get("description","")),"remote":bool(j.get("remote",False))}
  return {}
 def clean(items):
  seen=set();res=[]
@@ -248,3 +253,55 @@ def recommend_jobs(data:RecommendInput):
  from resume_intelligence import rank_jobs
  return {"jobs":rank_jobs(data.resume_text,[j.model_dump() for j in data.jobs],data.preferred_location,data.remote_only,data.max_experience),
          "method":"skill_keyword_overlap","note":"Relevance is not hiring probability. Feed jobs may have incomplete descriptions."}
+
+class JobWatchInput(BaseModel):
+ known_urls: List[str] = Field(default_factory=list,max_length=1000)
+ jobs: List[RecommendJob] = Field(min_length=1,max_length=100)
+
+@app.post("/api/jobs/changes")
+def job_changes(data:JobWatchInput):
+ from job_discovery_watch import new_job_matches
+ fresh=new_job_matches(data.known_urls,[j.model_dump() for j in data.jobs])
+ return {"new_jobs":fresh,"count":len(fresh),"notifications_sent":False,
+         "note":"Change detection only. Scheduled execution and notifications are not enabled."}
+
+class ApplicationCandidateReview(BaseModel):
+ full_name: str = Field(default="",max_length=200)
+ email: str = Field(default="",max_length=254)
+ phone: str = Field(default="",max_length=50)
+ resume_attached: bool = False
+
+class ApplicationQuestionReview(BaseModel):
+ key: str = Field(min_length=1,max_length=100)
+ required: bool = False
+ answer: str = Field(default="",max_length=3000)
+
+class ApplicationReviewInput(BaseModel):
+ apply_url: str = Field(max_length=2000)
+ candidate: ApplicationCandidateReview
+ employer_questions: List[ApplicationQuestionReview] = Field(default_factory=list,max_length=50)
+ candidate_approved: bool = False
+
+@app.post("/api/application/review")
+def application_review(data:ApplicationReviewInput):
+ from application_review import review_application
+ return review_application(data.model_dump())
+
+class ApplicationDraftCandidate(BaseModel):
+ full_name: str = Field(default="",max_length=200)
+ verified_skills: List[str] = Field(default_factory=list,max_length=50)
+
+class ApplicationDraftJob(BaseModel):
+ title: str = Field(min_length=2,max_length=250)
+ company: str = Field(min_length=1,max_length=180)
+ description: str = Field(default="",max_length=10000)
+
+class ApplicationDraftInput(BaseModel):
+ candidate: ApplicationDraftCandidate
+ job: ApplicationDraftJob
+ employer_questions: List[ApplicationQuestionReview] = Field(default_factory=list,max_length=50)
+
+@app.post("/api/application/draft")
+def application_draft(data:ApplicationDraftInput):
+ from application_draft import make_application_draft
+ return make_application_draft(data.candidate.model_dump(),data.job.model_dump(),[q.model_dump() for q in data.employer_questions])

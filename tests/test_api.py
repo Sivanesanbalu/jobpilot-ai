@@ -67,3 +67,18 @@ def test_invalid_resume_upload_too_large():
 def test_recommendation_rejects_invalid_experience_limit():
     payload={"resume_text":"Python machine learning engineering with development experience and practice.", "jobs":[{"title":"Engineer"}],"max_experience":-1}
     assert client.post("/api/resume/recommend",json=payload).status_code==422
+
+def test_job_description_normalization():
+ from app import normalized
+ job={"id":1,"title":"ML Engineer","content":"<p>Python &amp; <strong>PyTorch</strong> required</p>","absolute_url":"https://example.com/a","location":{"name":"Coimbatore"}}
+ result=normalized("greenhouse",job,"acme")
+ assert result["description"]=="Python & PyTorch required"
+ assert result["location"]=="Coimbatore"
+
+def test_remote_metadata_not_guessed():
+ from app import normalized
+ remote=normalized("remotive",{"id":2,"title":"Engineer","url":"https://example.com/remote","description":"<div>Python</div>"})
+ local=normalized("arbeitnow",{"slug":"job-3","title":"Engineer","url":"https://example.com/local","remote":False})
+ assert remote["remote"] is True
+ assert local["remote"] is False
+ assert remote["description"]=="Python"

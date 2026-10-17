@@ -11,7 +11,7 @@ def test_account_ui_present():
 
 def test_cloud_merge_preserves_unsynced_jobs():
     html = TestClient(app).get("/").text
-    assert "remote.concat(jobs().filter" in html
+    assert "setLocal(\"tracked\",mergeApplicationRecords(remote,jobs()))" in html
     assert "if(changed){syncReady=false" in html
 
 
@@ -23,7 +23,7 @@ def test_autosync_waits_for_successful_initial_save():
 
 def test_confirmed_submission_not_overwritten_by_unsent_local_data():
     html = TestClient(app).get("/").text
-    assert "existing.data.submitted_at&&!payload.submitted_at" in html
+    assert "existing.data.submitted_at&&(!payload.submitted_at||" in html
 
 
 def test_empty_job_sync_is_not_marked_successful():
@@ -36,3 +36,128 @@ def test_ranked_jobs_render_filtered_and_deduplicated_response():
     assert 'results=data.jobs.map(j=>buckets.get(' in html
     assert 'filter(Boolean)' in html
     assert 'unique listings matching your selected preferences' in html
+
+def test_notification_inbox_requires_signed_in_user():
+    html=TestClient(app).get("/").text
+    assert 'if(!user||!sb)' in html
+    assert 'sb.from("job_notifications").select(' in html
+    assert '.eq("user_id",user.id)' in html
+    assert 'id="loadNotificationsBtn"' in html
+    assert 'Mark read' in html
+
+def test_application_review_dashboard_routes_and_approval_control():
+    html = TestClient(app).get("/").text
+    assert 'id="applicationReviewCard"' in html
+    assert 'id="reviewApproved"' in html
+    assert 'id="generatedApplicationDraft"' in html
+    assert '"/api/application/draft"' in html
+    assert '"/api/application/review"' in html
+    assert 'candidate_approved:approved' in html
+    assert 'NOT SUBMITTED' in html
+    assert 'line.indexOf("=")' in html
+
+def test_application_draft_history_is_local_and_not_submitted():
+    html=TestClient(app).get("/").text
+    assert 'id="saveApplicationDraftBtn"' in html
+    assert 'id="showApplicationDraftsBtn"' in html
+    assert 'function draftStorageKey()' in html
+    assert 'function readDrafts()' in html
+    assert 'submission_status:"NOT_SUBMITTED"' in html
+    assert 'Review again before approval' in html
+    assert 'localStorage.setItem(draftStorageKey()' in html
+
+def test_tracker_manual_status_history_and_submission_guard():
+    html = TestClient(app).get("/").text
+    assert 'function updateTrackedStatus(job,next)' in html
+    assert 'next==="Applied"&&!job.submitted_at' in html
+    assert 'source:"candidate_manual_update"' in html
+    assert 'function trackerSummary()' in html
+    assert "heading.textContent='Status history (" in html
+    assert "updateTrackedStatus(j,'Applied')" in html
+
+def test_application_tracker_cloud_merge_and_duplicate_guards():
+    html=TestClient(app).get("/").text
+    assert 'function applicationUrlKey(url)' in html
+    assert 'function mergeApplicationRecords(remote,local)' in html
+    assert 'setLocal("tracked",mergeApplicationRecords(remote,jobs()))' in html
+    assert 'for(const j of mergeApplicationRecords([],jobs()))' in html
+    assert 'const confirmed=[previous,j].filter(x=>x.submitted_at).sort(' in html
+    assert 'p.pathname.replace(new RegExp("/+$"),"")' in html
+    assert '||"/")+p.search' in html
+
+def test_tracker_funnel_analytics_has_safe_zero_denominator():
+    html=TestClient(app).get("/").text
+    assert "function trackerConversionMetrics()" in html
+    assert "den?Math.round(1000*num/den)/10:0" in html
+    assert "counts.Applied+counts.Interview+counts.Offer+counts.Rejected" in html
+    assert "analytics.id='trackerConversionMetrics'" in html
+    assert "Interview: " in html and "Offers: " in html
+
+
+def test_merge_prefers_latest_confirmed_submission_timestamp():
+    html=TestClient(app).get("/").text
+    assert 'filter(x=>x.submitted_at).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)))' in html
+    assert 'const chosen=confirmed||j' in html
+
+
+def test_cloud_load_disregards_stale_account_fetch():
+    html=TestClient(app).get("/").text
+    assert "const loadOwner=user.id;" in html
+    assert "if(!user||user.id!==loadOwner)return;" in html
+    assert html.index("if(!user||user.id!==loadOwner)return;") < html.index('setLocal("tracked",mergeApplicationRecords(remote,jobs()))')
+
+
+def test_cloud_sync_rejects_older_confirmed_submission_than_server():
+    html=TestClient(app).get("/").text
+    assert 'existing.data.submitted_at&&(!payload.submitted_at||String(existing.data.submitted_at)>String(payload.submitted_at))' in html
+    assert "cloud has a newer confirmed submission" in html
+
+
+def test_cloud_sync_feedback_is_account_safe_and_retryable():
+    html=TestClient(app).get("/").text
+    assert 'const owner=user.id;' in html
+    assert 'if(!user||user.id!==owner)return false;' in html
+    assert 'Retry using the Cloud sync button.' in html
+
+
+def test_cloud_sync_stops_writes_after_account_change():
+    html=TestClient(app).get("/").text
+    assert 'const owner=user.id;' in html
+    assert html.count('Account changed during sync; stopped remaining writes') == 2
+    assert 'const payload={user_id:owner,company:j.company' in html
+
+
+def test_stale_cloud_load_errors_not_shown_after_account_switch():
+    html=TestClient(app).get('/').text
+    assert 'if(user&&user.id===loadOwner)notice("Cloud load failed: "+e.message)' in html
+
+
+def test_cloud_history_read_results_are_account_scoped():
+    html=TestClient(app).get('/').text
+    for fn in ('cloudApprovalHistory','cloudLoadApplicationDrafts','cloudStatusHistory'):
+        start=html.index('async function '+fn+'()')
+        following=html.find('async function ',start+17)
+        body=html[start:following if following!=-1 else None]
+        assert 'const requestOwner=user.id;' in body
+        assert 'if(!user||user.id!==requestOwner)return;' in body
+
+
+def test_cloud_draft_approval_is_account_scoped():
+    html=TestClient(app).get('/').text
+    start=html.index('async function setCloudDraftApproval(id,approved)')
+    body=html[start:html.index('async function cloudApprovalHistory()',start)]
+    assert 'const owner=user.id;' in body
+    assert 'if(!user||user.id!==owner)return;' in body
+    assert '.eq("user_id",owner)' in body
+    assert body.count('if(!user||user.id!==owner)return;')==2
+
+
+def test_cloud_draft_actions_guard_against_account_switch():
+    html=TestClient(app).get('/').text
+    start=html.index('async function cloudLoadApplicationDrafts()')
+    end=html.index('function draftStorageKey()',start)
+    body=html[start:end]
+    assert 'restore.onclick=()=>{if(!user||user.id!==requestOwner)return;' in body
+    assert 'remove.onclick=async()=>{if(!user||user.id!==requestOwner)return;' in body
+    assert '.eq("user_id",requestOwner)' in body
+    assert 'track.onclick=()=>{if(!user||user.id!==requestOwner)return;' in body

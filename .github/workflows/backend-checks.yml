@@ -1,18 +1,114 @@
 name: Backend checks
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: backend-tests-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -r requirements.txt
-      - run: python -m compileall -q app.py
-      - run: python -m pytest -q tests
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Validate installed dependencies
+        run: python -m pip check
+      - name: Compile backend modules
+        run: python -m compileall -q app.py resume_intelligence.py job_discovery_watch.py discovery_state.py discovery_worker.py discovery_scheduler.py supabase_discovery_worker.py postgres_discovery_repository.py worker_runtime.py application_review.py application_draft.py
+      - name: Validate inline dashboard JavaScript syntax
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__(); self.inline=[]; self.active=False; self.buffer=[]
+              def handle_starttag(self, tag, attrs):
+                  if tag=='script':
+                      self.active=True; self.buffer=[]
+              def handle_data(self, data):
+                  if self.active: self.buffer.append(data)
+              def handle_endtag(self, tag):
+                  if tag=='script' and self.active:
+                      self.inline.append(''.join(self.buffer)); self.active=False
+          p=Scripts(); p.feed(Path('dashboard.html').read_text())
+          for i,script in enumerate(p.inline):
+              if script.strip(): Path(f'/tmp/jobpilot-inline-{i}.mjs').write_text(script)
+          PY
+          for file in /tmp/jobpilot-inline-*.mjs; do [ -e "$file" ] || continue; node --check "$file"; done
+      - name: Offline production release preflight
+        run: python scripts/release_preflight.py
+      - name: Verify migration manifest integrity
+        run: python scripts/check_migration_manifest.py
+      - name: Run full regression suite
+        run: python -m pytest -q tests --ignore=tests/browser --junitxml=test-results.xml
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-pytest-results
+          path: test-results.xml
+          if-no-files-found: ignore
+          retention-days: 7
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install app and browser test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install playwright uvicorn
+          python -m playwright install --with-deps chromium
+      - name: Start local application
+        run: |
+          python -m uvicorn app:app --host 127.0.0.1 --port 8765 > /tmp/jobpilot-server.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8765/api/health > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/jobpilot-server.log
+          exit 1
+      - name: Run real Chromium smoke tests
+        run: python -m pytest -q tests/browser
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: jobpilot_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d jobpilot_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      JOBPILOT_TEST_DATABASE_URL: postgresql://postgres:local-test-only@127.0.0.1:5432/jobpilot_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PostgreSQL test driver
+        run: python -m pip install 'asyncpg>=0.29,<1'
+      - name: Run isolated real PostgreSQL integration
+        run: python tests/postgres/integration.py
