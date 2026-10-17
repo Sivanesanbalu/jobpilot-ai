@@ -98,8 +98,6 @@ def test_preflight_rejects_invalid_project_references():
 
 
 def test_preflight_rejects_placeholder_and_non_string_refs():
-    for invalid in (None, False, 12345678, 'yourprojectref'):
+    for invalid in (None, False, 12345678):
         result = evaluate({'STAGING_PROJECT_REF': invalid, 'PRODUCTION_PROJECT_REF': 'production123456', 'RELEASE_TARGET': 'staging'})
-        if invalid == 'yourprojectref':
-            continue  # syntactically valid aliases cannot be distinguished offline
         assert result['separate_staging'] is False
