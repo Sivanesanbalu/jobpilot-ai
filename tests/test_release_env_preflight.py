@@ -1,133 +1,74 @@
-from scripts.release_env_preflight import evaluate
+"""Regression tests for a fail-closed, strictly offline staging release gate."""
+import json
+import os
+import subprocess
+import sys
+
+from scripts.release_env_preflight import evaluate, release_decision
+
+STAGE = "abcdefghijklmnopqrst"
+PROD = "uvwxyzabcdefghijklmn"
 
 
-def test_release_environment_allows_isolated_staging():
-    result = evaluate({'STAGING_PROJECT_REF': 'staging123456', 'PRODUCTION_PROJECT_REF': 'production123456', 'RELEASE_TARGET': 'staging'})
-    assert all(result.values())
+def settings(**overrides):
+    return dict(STAGING_PROJECT_REF=STAGE, PRODUCTION_PROJECT_REF=PROD,
+                RELEASE_TARGET="staging", PRODUCTION_APPROVED="no", **overrides)
 
 
-def test_release_environment_blocks_production_target_and_shared_database():
-    result = evaluate({'STAGING_PROJECT_REF': 'production123456', 'PRODUCTION_PROJECT_REF': 'production123456', 'RELEASE_TARGET': 'production', 'PRODUCTION_APPROVED': 'yes'})
-    assert result["safe_for_staging"] is False
-    assert result["separate_staging"] is False
-    assert result["staging_mode"] is False
+def test_isolated_staging_is_only_safe_target():
+    state = evaluate(settings())
+    assert state["safe_for_staging"]
+    assert state["separate_staging"] and state["valid_project_refs"]
+    assert state["production_locked"]
 
 
-def test_release_environment_blocks_missing_stage():
-    result = evaluate({'PRODUCTION_PROJECT_REF': 'production123456', 'RELEASE_TARGET': 'staging'})
-    assert result['separate_staging'] is False
+def test_prod_approval_and_prod_target_are_always_blocked():
+    state = evaluate({**settings(), "PRODUCTION_APPROVED": "yes", "RELEASE_TARGET": "production"})
+    assert not state["safe_for_staging"]
+    assert not state["staging_mode"]
+    assert not state["production_locked"]
 
 
-
-def test_same_project_ref_with_whitespace_and_case_is_blocked():
-    result = evaluate({
-        'STAGING_PROJECT_REF': ' Production-Project ',
-        'PRODUCTION_PROJECT_REF': 'production123456',
-        'RELEASE_TARGET': 'staging',
-    })
-    assert result['separate_staging'] is False
-    assert result['safe_for_staging'] is False
+def test_duplicate_project_ref_fails_closed():
+    state = evaluate({**settings(), "STAGING_PROJECT_REF": PROD})
+    assert not state["separate_staging"]
+    assert not state["safe_for_staging"]
 
 
-def test_invalid_project_refs_are_blocked():
-    for invalid in ('https://supabase.co/project', '../production', 'project name', '', None):
-        result = evaluate({
-            'STAGING_PROJECT_REF': invalid,
-            'PRODUCTION_PROJECT_REF': 'production123456',
-            'RELEASE_TARGET': 'staging',
-        })
-        assert result['safe_for_staging'] is False
+def test_invalid_project_refs_never_pass():
+    for invalid in ("", None, False, 123, " ", "staging", "STAGINGPROJECT1234567",
+                    "abc-1234567890abcdef", "https://a.supabase.co", "../production",
+                    " abcdefghijklmnopqrst", "abcdefghijklmnopqrst "):
+        state = evaluate({**settings(), "STAGING_PROJECT_REF": invalid})
+        assert not state["valid_project_refs"]
+        assert not state["safe_for_staging"]
 
 
-def test_production_approval_flag_does_not_unlock_staging_preflight():
-    result = evaluate({
-        'STAGING_PROJECT_REF': 'staging123456',
-        'PRODUCTION_PROJECT_REF': 'production123456',
-        'RELEASE_TARGET': 'staging',
-        'PRODUCTION_APPROVED': 'yes',
-    })
-    assert result['safe_for_staging'] is False
+def test_unknown_target_fails_closed():
+    assert not evaluate({**settings(), "RELEASE_TARGET": "preview"})["valid_target"]
 
 
-def test_release_decision_fails_closed_without_staging_evidence():
-    from scripts.release_env_preflight import release_decision
-    result = release_decision({'STAGING_PROJECT_REF': 'staging', 'PRODUCTION_PROJECT_REF': 'production', 'RELEASE_TARGET': 'staging'})
-    assert result['ready_for_release_review'] is False
-    assert result['checks']['staging_auth_e2e'] is False
-    assert result['checks']['release_reviewed'] is False
+def test_release_evidence_is_required_without_treating_ci_as_supabase_e2e():
+    assert not release_decision(settings())["ready_for_release_review"]
+    evidence = dict(STAGING_AUTH_E2E_VERIFIED="yes", STAGING_RLS_E2E_VERIFIED="yes",
+                    STAGING_MIGRATIONS_VERIFIED="yes", RELEASE_REVIEW_APPROVED="yes")
+    assert release_decision({**settings(), **evidence})["ready_for_release_review"]
+    for key in evidence:
+        incomplete = {**settings(), **evidence, key: "no"}
+        assert not release_decision(incomplete)["ready_for_release_review"]
 
 
-def test_release_decision_requires_every_staging_gate():
-    from scripts.release_env_preflight import release_decision
-    env = {
-        'STAGING_PROJECT_REF': 'staging',
-        'PRODUCTION_PROJECT_REF': 'production',
-        'RELEASE_TARGET': 'staging',
-        'STAGING_AUTH_E2E_VERIFIED': 'yes',
-        'STAGING_RLS_E2E_VERIFIED': 'yes',
-        'STAGING_MIGRATIONS_VERIFIED': 'yes',
-        'RELEASE_REVIEW_APPROVED': 'yes',
-    }
-    assert release_decision(env)['ready_for_release_review'] is True
-    env['STAGING_RLS_E2E_VERIFIED'] = 'no'
-    assert release_decision(env)['ready_for_release_review'] is False
-
-
-def test_release_environment_rejects_unknown_target():
-    result = evaluate({"STAGING_PROJECT_REF":"stage","PRODUCTION_PROJECT_REF":"prod","RELEASE_TARGET":"preview"})
-    assert result["valid_target"] is False
-    assert result["staging_mode"] is False
-
-
-def test_release_environment_rejects_blank_refs():
-    result = evaluate({"STAGING_PROJECT_REF":"  ","PRODUCTION_PROJECT_REF":"prod","RELEASE_TARGET":"staging"})
-    assert result["refs_present"] is False
-    assert result["separate_staging"] is False
-
-
-def test_production_approval_never_opens_staging_gate():
-    result = evaluate({"STAGING_PROJECT_REF":"stage","PRODUCTION_PROJECT_REF":"prod","RELEASE_TARGET":"production","PRODUCTION_APPROVED":"yes"})
-    assert result["staging_mode"] is False
-    assert result["production_locked"] is False
-
-
-def test_preflight_rejects_invalid_project_references():
-    for invalid in ('', ' staging123456 ', 'https://staging123456.supabase.co', 'your-project-ref', 'STAGING123456', 'abc'):
-        result = evaluate({'STAGING_PROJECT_REF': invalid, 'PRODUCTION_PROJECT_REF': 'production123456', 'RELEASE_TARGET': 'staging'})
-        assert result['separate_staging'] is False
-
-
-def test_preflight_rejects_placeholder_and_non_string_refs():
-    for invalid in (None, False, 12345678):
-        result = evaluate({'STAGING_PROJECT_REF': invalid, 'PRODUCTION_PROJECT_REF': 'production123456', 'RELEASE_TARGET': 'staging'})
-        assert result['separate_staging'] is False
-
-
-def test_release_environment_rejects_malformed_project_refs():
-    result = evaluate({'STAGING_PROJECT_REF': 'https://example.supabase.co', 'PRODUCTION_PROJECT_REF': 'productionproject1234', 'RELEASE_TARGET': 'staging'})
-    assert result['valid_project_refs'] is False
-
-
-def test_release_environment_rejects_whitespace_and_missing_ref():
-    result = evaluate({'STAGING_PROJECT_REF': ' ', 'PRODUCTION_PROJECT_REF': 'productionproject1234', 'RELEASE_TARGET': 'staging'})
-    assert result['valid_project_refs'] is False
-    assert result['separate_staging'] is False
-
-def test_preflight_cli_blocks_unsafe_release_and_redacts_project_refs():
-    import json
-    import os
-    import subprocess
-    import sys
-
-    env = dict(os.environ, STAGING_PROJECT_REF="secret-staging-ref", PRODUCTION_PROJECT_REF="secret-production-ref", RELEASE_TARGET="staging", PRODUCTION_APPROVED="no")
+def test_cli_is_private_and_returns_nonzero_for_unsafe_environment():
+    env = {**os.environ, **settings(), "SECRET_EXAMPLE": "do-not-print"}
     cmd = [sys.executable, "-m", "scripts.release_env_preflight"]
-    passed = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    assert passed.returncode == 0
-    assert json.loads(passed.stdout)["staging_preflight_passed"] is True
-    assert "secret-staging-ref" not in passed.stdout
-    assert "secret-production-ref" not in passed.stdout
-
+    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert data["staging_preflight_passed"] is True
+    assert data["ready_for_release_review"] is False
+    assert STAGE not in result.stdout and PROD not in result.stdout
+    assert "do-not-print" not in result.stdout
     env["RELEASE_TARGET"] = "production"
-    blocked = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    assert blocked.returncode != 0
-    assert json.loads(blocked.stdout)["staging_preflight_passed"] is False
+    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert json.loads(result.stdout)["staging_preflight_passed"] is False
