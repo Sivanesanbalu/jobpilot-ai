@@ -69,3 +69,21 @@ def test_release_decision_requires_every_staging_gate():
     assert release_decision(env)['ready_for_release_review'] is True
     env['STAGING_RLS_E2E_VERIFIED'] = 'no'
     assert release_decision(env)['ready_for_release_review'] is False
+
+
+def test_release_environment_rejects_unknown_target():
+    result = evaluate({"STAGING_PROJECT_REF":"stage","PRODUCTION_PROJECT_REF":"prod","RELEASE_TARGET":"preview"})
+    assert result["valid_target"] is False
+    assert result["staging_mode"] is False
+
+
+def test_release_environment_rejects_blank_refs():
+    result = evaluate({"STAGING_PROJECT_REF":"  ","PRODUCTION_PROJECT_REF":"prod","RELEASE_TARGET":"staging"})
+    assert result["refs_present"] is False
+    assert result["separate_staging"] is False
+
+
+def test_production_approval_never_opens_staging_gate():
+    result = evaluate({"STAGING_PROJECT_REF":"stage","PRODUCTION_PROJECT_REF":"prod","RELEASE_TARGET":"production","PRODUCTION_APPROVED":"yes"})
+    assert result["staging_mode"] is False
+    assert result["production_locked"] is False
