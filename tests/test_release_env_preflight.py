@@ -8,7 +8,9 @@ def test_release_environment_allows_isolated_staging():
 
 def test_release_environment_blocks_production_target_and_shared_database():
     result = evaluate({'STAGING_PROJECT_REF': 'production-project', 'PRODUCTION_PROJECT_REF': 'production-project', 'RELEASE_TARGET': 'production', 'PRODUCTION_APPROVED': 'yes'})
-    assert not any(result.values())
+    assert result["safe_for_staging"] is False
+    assert result["separate_staging"] is False
+    assert result["staging_mode"] is False
 
 
 def test_release_environment_blocks_missing_stage():
